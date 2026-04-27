@@ -8,11 +8,11 @@ import {
 } from 'react-native';
 
 import { Colors } from '@/constants/colors';
-import { FontFamily, FontSize, Radius, Spacing } from '@/constants/typography';
+import { FontFamily, FontSize, Spacing } from '@/constants/typography';
 import { FALLBACK_CATEGORY } from '@/constants/categories';
 import { useStore } from '@/store/useStore';
 import { byPeriod, byPrevPeriod, periodDays } from '@/utils/date';
-import { catStats, comparePeriods, sumAmount, topN } from '@/utils/analytics';
+import { catStats, comparePeriods, topN } from '@/utils/analytics';
 import { fmt, fmtLabel } from '@/utils/format';
 import type { Period } from '@/types';
 

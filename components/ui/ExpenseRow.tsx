@@ -1,10 +1,9 @@
 import { Text, View, type TextStyle, type ViewStyle } from 'react-native';
 import type { Category, Expense } from '@/types';
-import { Colors } from '@/constants/colors';
+import { Colors, withAlpha } from '@/constants/colors';
 import { FontFamily, FontSize, Radius } from '@/constants/typography';
 import { FALLBACK_CATEGORY } from '@/constants/categories';
 import { fmt, fmtLabel } from '@/utils/format';
-import { withAlpha } from '@/constants/colors';
 
 interface ExpenseRowProps {
   expense: Expense;
