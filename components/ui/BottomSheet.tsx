@@ -1,0 +1,235 @@
+import { useEffect, useState } from 'react';
+import {
+  Keyboard,
+  Platform,
+  Pressable,
+  Text,
+  View,
+  type DimensionValue,
+  type TextStyle,
+  type ViewStyle,
+} from 'react-native';
+import Animated, {
+  Easing,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+
+import { Colors } from '@/constants/colors';
+import { FontFamily, FontSize, Radius } from '@/constants/typography';
+
+const ENTER_DURATION = 320;
+const EXIT_DURATION = 220;
+const OVERLAY_DURATION = 200;
+const SHEET_EASING = Easing.bezier(0.16, 1, 0.3, 1);
+// iOS keyboard uses UIViewAnimationCurve.keyboardDefault (~ easeInOut bezier).
+// This curve matches the system slide so our sheet rides exactly with the keyboard.
+const KEYBOARD_EASING = Easing.bezier(0.17, 0.59, 0.4, 0.77);
+const KEYBOARD_FALLBACK_DURATION = 250;
+
+const DRAG_CLOSE_DISTANCE = 120;
+const DRAG_CLOSE_VELOCITY = 800;
+const DRAG_ACTIVE_OFFSET = 4;
+const DRAG_FADE_DISTANCE = 250;
+const DRAG_SPRING = { damping: 26, stiffness: 320, mass: 0.8 } as const;
+
+interface BottomSheetProps {
+  open: boolean;
+  onClose: () => void;
+  title?: string;
+  maxHeight?: DimensionValue;
+  children: React.ReactNode;
+  zIndex?: number;
+}
+
+export function BottomSheet({
+  open,
+  onClose,
+  title,
+  maxHeight = '78%',
+  children,
+  zIndex = 400,
+}: BottomSheetProps) {
+  const [mounted, setMounted] = useState(open);
+  const overlayOpacity = useSharedValue(0);
+  const sheetTranslate = useSharedValue(40);
+  const sheetOpacity = useSharedValue(0);
+  const keyboardOffset = useSharedValue(0);
+
+  // Push the sheet up when the soft keyboard appears so inputs stay visible.
+  // We use the duration delivered by the OS event so the sheet rides exactly
+  // in sync with the native keyboard slide animation.
+  useEffect(() => {
+    if (!mounted) return;
+    const isIOS = Platform.OS === 'ios';
+    const showEvent = isIOS ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = isIOS ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      const h = e.endCoordinates?.height ?? 0;
+      const dur = e.duration && e.duration > 0 ? e.duration : KEYBOARD_FALLBACK_DURATION;
+      keyboardOffset.value = withTiming(-h, { duration: dur, easing: KEYBOARD_EASING });
+    });
+    const hideSub = Keyboard.addListener(hideEvent, (e) => {
+      const dur = e.duration && e.duration > 0 ? e.duration : KEYBOARD_FALLBACK_DURATION;
+      keyboardOffset.value = withTiming(0, { duration: dur, easing: KEYBOARD_EASING });
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [mounted, keyboardOffset]);
+
+  useEffect(() => {
+    if (open) {
+      setMounted(true);
+      overlayOpacity.value = withTiming(1, { duration: OVERLAY_DURATION });
+      sheetTranslate.value = withTiming(0, { duration: ENTER_DURATION, easing: SHEET_EASING });
+      sheetOpacity.value = withTiming(1, { duration: ENTER_DURATION, easing: SHEET_EASING });
+    } else if (mounted) {
+      overlayOpacity.value = withTiming(0, { duration: EXIT_DURATION });
+      // Continue from current translate (in case user dragged sheet down before close)
+      sheetTranslate.value = withTiming(sheetTranslate.value + 40, {
+        duration: EXIT_DURATION,
+      });
+      sheetOpacity.value = withTiming(0, { duration: EXIT_DURATION });
+      const t = setTimeout(() => setMounted(false), EXIT_DURATION);
+      return () => clearTimeout(t);
+    }
+  }, [open, mounted, overlayOpacity, sheetTranslate, sheetOpacity]);
+
+  const overlayStyle = useAnimatedStyle(() => ({
+    opacity: overlayOpacity.value,
+  }));
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: sheetTranslate.value + keyboardOffset.value }],
+    opacity: sheetOpacity.value,
+  }));
+
+  // Filler under the sheet — fills the gap between sheet bottom and the
+  // top of the soft keyboard, so the gap doesn't show through as the bg color.
+  const fillerStyle = useAnimatedStyle(() => ({
+    height: Math.max(0, -keyboardOffset.value),
+    opacity: sheetOpacity.value,
+  }));
+
+  // Pan with low-threshold downward activation so the very first pixel of
+  // movement maps 1:1 onto the sheet — no initial jump from a minDistance gate.
+  // Direction is filtered inside the worklet (translationY <= 0 ignored).
+  const dragGesture = Gesture.Pan()
+    .activeOffsetY(DRAG_ACTIVE_OFFSET)
+    .onUpdate((e) => {
+      'worklet';
+      if (e.translationY <= 0) return;
+      sheetTranslate.value = e.translationY;
+      overlayOpacity.value = Math.max(0, 1 - e.translationY / DRAG_FADE_DISTANCE);
+    })
+    .onEnd((e) => {
+      'worklet';
+      const shouldClose =
+        e.translationY > DRAG_CLOSE_DISTANCE || e.velocityY > DRAG_CLOSE_VELOCITY;
+      if (shouldClose) {
+        runOnJS(onClose)();
+      } else {
+        sheetTranslate.value = withSpring(0, DRAG_SPRING);
+        overlayOpacity.value = withTiming(1, { duration: 200 });
+      }
+    });
+
+  if (!mounted) return null;
+
+  return (
+    <View style={[wrapperStyle, { zIndex }]} pointerEvents="box-none">
+      <Animated.View style={[overlayBaseStyle, overlayStyle]}>
+        <Pressable style={overlayPressStyle} onPress={onClose} />
+      </Animated.View>
+      <Animated.View style={[sheetBaseStyle, { maxHeight }, sheetStyle]}>
+        <GestureDetector gesture={dragGesture}>
+          <View style={dragZoneStyle}>
+            <View style={handleRowStyle}>
+              <View style={handleStyle} />
+            </View>
+            {title ? <Text style={titleStyle}>{title}</Text> : null}
+          </View>
+        </GestureDetector>
+        <View style={contentStyle}>{children}</View>
+      </Animated.View>
+      <Animated.View style={[fillerBaseStyle, fillerStyle]} pointerEvents="none" />
+    </View>
+  );
+}
+
+const wrapperStyle: ViewStyle = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  justifyContent: 'flex-end',
+};
+
+const overlayBaseStyle: ViewStyle = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: 'rgba(0,0,0,0.55)',
+};
+
+const overlayPressStyle: ViewStyle = {
+  flex: 1,
+};
+
+const sheetBaseStyle: ViewStyle = {
+  backgroundColor: Colors.surfaceHigh,
+  borderTopLeftRadius: Radius.sheet,
+  borderTopRightRadius: Radius.sheet,
+  borderTopWidth: 1,
+  borderTopColor: Colors.borderMid,
+  paddingBottom: 28,
+};
+
+const fillerBaseStyle: ViewStyle = {
+  position: 'absolute',
+  bottom: 0,
+  left: 0,
+  right: 0,
+  backgroundColor: Colors.surfaceHigh,
+};
+
+const dragZoneStyle: ViewStyle = {
+  // Whole top area of the sheet acts as a drag handle — handle bar + title.
+  // This is much more forgiving on mobile than a thin 4px stripe.
+};
+
+const handleRowStyle: ViewStyle = {
+  alignItems: 'center',
+  paddingTop: 14,
+  paddingBottom: 14,
+};
+
+const handleStyle: ViewStyle = {
+  width: 44,
+  height: 5,
+  borderRadius: 3,
+  backgroundColor: 'rgba(255,255,255,0.22)',
+};
+
+const titleStyle: TextStyle = {
+  fontFamily: FontFamily.semibold,
+  fontSize: FontSize.lg,
+  color: Colors.text,
+  paddingHorizontal: 20,
+  paddingBottom: 14,
+};
+
+const contentStyle: ViewStyle = {
+  paddingHorizontal: 20,
+};
