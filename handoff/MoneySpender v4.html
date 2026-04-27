@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MoneySpender</title>
+<template id="__bundler_thumbnail"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80"><rect width="120" height="80" fill="#07091a"/><rect x="20" y="12" width="80" height="56" rx="10" fill="#0d1124" stroke="#3b5bdb" stroke-width="1.5"/><rect x="30" y="22" width="40" height="4" rx="2" fill="#f0f2ff" opacity="0.4"/><rect x="30" y="30" width="60" height="8" rx="3" fill="#3b5bdb" opacity="0.7"/><rect x="30" y="42" width="60" height="4" rx="2" fill="#131929"/><rect x="30" y="42" width="38" height="4" rx="2" fill="#ff7043"/><rect x="30" y="50" width="60" height="4" rx="2" fill="#131929"/><rect x="30" y="50" width="24" height="4" rx="2" fill="#ffb300"/><circle cx="60" cy="72" r="5" fill="#3b5bdb"/></svg></template>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+body { background:#04060f; display:flex; align-items:center; justify-content:center; min-height:100vh; font-family:'Inter',sans-serif; }
+::-webkit-scrollbar { display:none; }
+* { scrollbar-width:none; }
+@keyframes slideUp { from { transform:translateY(40px); opacity:0; } to { transform:translateY(0); opacity:1; } }
+@keyframes fadeIn  { from { opacity:0; } to { opacity:1; } }
+.drum-col { overflow-y:scroll; scroll-snap-type:y mandatory; height:168px; }
+.drum-col::-webkit-scrollbar { display:none; }
+.drum-item { scroll-snap-align:center; height:42px; display:flex; align-items:center; justify-content:center; font-size:17px; font-family:'Inter',sans-serif; color:rgba(240,242,255,0.35); font-weight:300; transition:color 0.1s; cursor:pointer; user-select:none; }
+.drum-item.active { color:#f0f2ff; font-weight:500; }
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance:none; }
+input[type=number] { -moz-appearance:textfield; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ── Palette ──────────────────────────────────────────────────────
+const C = {
+  bg:'#07091a', surface:'#0d1124', surfaceHigh:'#131929', surfaceTop:'#1a2235',
+  border:'rgba(255,255,255,0.07)', borderMid:'rgba(255,255,255,0.11)',
+  accent:'#3b5bdb', text:'#f0f2ff', textDim:'rgba(240,242,255,0.65)',
+  textMuted:'rgba(240,242,255,0.35)', negative:'#ff5757',
+};
+
+// ── Default Categories ────────────────────────────────────────────
+const DEFAULT_CATS = [
+  { id:'food',    label:'Еда',           color:'#ff7043', icon:'🛒' },
+  { id:'cafe',    label:'Кафе',          color:'#ffb300', icon:'☕' },
+  { id:'trans',   label:'Транспорт',     color:'#29b6f6', icon:'🚇' },
+  { id:'shop',    label:'Покупки',       color:'#26c6da', icon:'🛍️' },
+  { id:'housing', label:'ЖКХ',          color:'#ab47bc', icon:'💡' },
+  { id:'health',  label:'Здоровье',      color:'#66bb6a', icon:'💊' },
+  { id:'sport',   label:'Спорт',         color:'#9ccc65', icon:'🏋️' },
+  { id:'entert',  label:'Развлечения',   color:'#ec407a', icon:'🎮' },
+  { id:'travel',  label:'Путешествия',   color:'#42a5f5', icon:'✈️' },
+  { id:'other',   label:'Другое',        color:'#78909c', icon:'📌' },
+];
+const ICON_OPTIONS = ['🛒','☕','🚇','🛍️','💡','💊','🏋️','🎮','✈️','📌','🍔','🎵','📱','🏠','🐕','🌿','🎨','📚','💼','🏥'];
+const COLOR_OPTIONS = ['#ff7043','#ffb300','#29b6f6','#26c6da','#ab47bc','#66bb6a','#9ccc65','#ec407a','#42a5f5','#78909c','#ef5350','#26a69a'];
+
+// ── Sample Data ───────────────────────────────────────────────────
+const NOW = new Date();
+const ago = (days, h, m) => { const d = new Date(NOW); d.setDate(d.getDate()-days); d.setHours(h,m,0,0); return d; };
+const SAMPLE = [
+  {id:1,  cat:'food',    name:'Пятёрочка',     amount:1840, date:ago(0,10,30)},
+  {id:2,  cat:'cafe',    name:'Surf Coffee',   amount:420,  date:ago(0,9,15) },
+  {id:3,  cat:'trans',   name:'Метро',         amount:66,   date:ago(0,8,45) },
+  {id:4,  cat:'health',  name:'Аптека',        amount:980,  date:ago(1,18,0) },
+  {id:5,  cat:'entert',  name:'Кинотеатр',     amount:750,  date:ago(1,20,30)},
+  {id:6,  cat:'food',    name:'ВкусВилл',      amount:2100, date:ago(2,12,0) },
+  {id:7,  cat:'shop',    name:'Wildberries',   amount:3600, date:ago(3,15,20)},
+  {id:8,  cat:'housing', name:'Электроэнергия',amount:1200, date:ago(5,9,0)  },
+  {id:9,  cat:'cafe',    name:'Burger King',   amount:560,  date:ago(5,13,30)},
+  {id:10, cat:'trans',   name:'Яндекс Такси',  amount:380,  date:ago(6,22,15)},
+  {id:11, cat:'sport',   name:'Спортзал',      amount:2500, date:ago(7,8,0)  },
+  {id:12, cat:'food',    name:'Лента',         amount:1620, date:ago(8,17,45)},
+  {id:13, cat:'entert',  name:'Spotify',       amount:299,  date:ago(10,0,0) },
+  {id:14, cat:'shop',    name:'DNS',           amount:5400, date:ago(12,14,0)},
+  {id:15, cat:'housing', name:'Интернет',      amount:650,  date:ago(14,9,0) },
+  {id:16, cat:'cafe',    name:'Starbucks',     amount:390,  date:ago(15,16,0)},
+  {id:17, cat:'trans',   name:'АЗС',           amount:2800, date:ago(18,11,0)},
+  {id:18, cat:'health',  name:'Врач',          amount:1500, date:ago(20,10,0)},
+  {id:19, cat:'food',    name:'Самокат',       amount:870,  date:ago(22,19,30)},
+  {id:20, cat:'travel',  name:'Aviasales',     amount:8400, date:ago(24,11,0)},
+  // prev month
+  {id:21, cat:'food',    name:'Магнит',        amount:1560, date:ago(31,11,0)},
+  {id:22, cat:'cafe',    name:'Costa Coffee',  amount:480,  date:ago(32,9,0) },
+  {id:23, cat:'trans',   name:'Метро',         amount:132,  date:ago(33,8,0) },
+  {id:24, cat:'shop',    name:'Ozon',          amount:4200, date:ago(35,14,0)},
+  {id:25, cat:'housing', name:'Газ',           amount:890,  date:ago(36,9,0) },
+  {id:26, cat:'health',  name:'Аптека',        amount:740,  date:ago(38,12,0)},
+  {id:27, cat:'entert',  name:'Театр',         amount:1200, date:ago(40,19,0)},
+  {id:28, cat:'food',    name:'ВкусВилл',      amount:1980, date:ago(42,17,0)},
+  {id:29, cat:'sport',   name:'Спортзал',      amount:2500, date:ago(45,8,0) },
+  {id:30, cat:'trans',   name:'Такси',         amount:620,  date:ago(48,22,0)},
+  {id:31, cat:'shop',    name:'Adidas',        amount:6800, date:ago(55,13,0)},
+];
+
+// ── Helpers ───────────────────────────────────────────────────────
+const fmt  = n => n.toLocaleString('ru-RU') + '\u00a0₽';
+const fmtK = n => n >= 1000 ? (n/1000).toFixed(1).replace('.0','')+'к' : String(n);
+const hhmm = d => String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');
+const fmtLabel = d => {
+  const diff = Math.floor((NOW-d)/86400000);
+  if (diff===0) return 'Сегодня, '+hhmm(d);
+  if (diff===1) return 'Вчера, '+hhmm(d);
+  return d.toLocaleDateString('ru-RU',{day:'numeric',month:'short'})+', '+hhmm(d);
+};
+const dayHeader = d => {
+  const diff = Math.floor((NOW-d)/86400000);
+  if (diff===0) return 'Сегодня';
+  if (diff===1) return 'Вчера';
+  return d.toLocaleDateString('ru-RU',{day:'numeric',month:'long'});
+};
+const byPeriod = (arr, p) => arr.filter(e => {
+  const d = (NOW-e.date)/86400000;
+  return p==='day'?d<1 : p==='week'?d<7 : p==='month'?d<30 : d<90;
+});
+const catStats = (arr) => {
+  const m = {};
+  arr.forEach(e => { m[e.cat]=(m[e.cat]||0)+e.amount; });
+  return Object.entries(m).map(([id,total])=>({id,total})).sort((a,b)=>b.total-a.total);
+};
+const groupDays = (arr) => {
+  const g = {};
+  [...arr].sort((a,b)=>b.date-a.date).forEach(e=>{
+    const k=e.date.toDateString();
+    if (!g[k]) g[k]={label:dayHeader(e.date),items:[],total:0};
+    g[k].items.push(e); g[k].total+=e.amount;
+  });
+  return Object.values(g);
+};
+
+// ── iPhone Frame ──────────────────────────────────────────────────
+function IPhoneFrame({ children }) {
+  return (
+    <div style={{position:'relative',width:390,height:844,borderRadius:54,flexShrink:0,
+      background:'linear-gradient(145deg,#222 0%,#161616 50%,#0e0e0e 100%)',
+      boxShadow:'0 0 0 1.5px #2e2e2e,0 0 0 3px #0a0a0a,0 40px 100px rgba(0,0,0,0.9)'}}>
+      <div style={{position:'absolute',inset:2,borderRadius:52,overflow:'hidden',background:C.bg}}>
+        {/* status bar */}
+        <div style={{height:52,display:'flex',alignItems:'flex-end',justifyContent:'space-between',
+          padding:'0 28px 10px',position:'relative',zIndex:50,background:C.bg,flexShrink:0}}>
+          <span style={{fontSize:15,fontWeight:600,color:'white',fontFamily:'-apple-system,sans-serif',letterSpacing:'-0.3px'}}>9:41</span>
+          <div style={{position:'absolute',top:12,left:'50%',transform:'translateX(-50%)',width:120,height:34,borderRadius:20,background:'#000'}}/>
+          <div style={{display:'flex',gap:6,alignItems:'center'}}>
+            <svg width="17" height="11" viewBox="0 0 17 11" fill="white">
+              <rect x="0" y="4" width="3" height="7" rx="1" opacity="0.35"/>
+              <rect x="4.5" y="2.5" width="3" height="8.5" rx="1" opacity="0.55"/>
+              <rect x="9" y="1" width="3" height="10" rx="1"/>
+              <rect x="13.5" y="0" width="3" height="11" rx="1"/>
+            </svg>
+            <svg width="25" height="12" viewBox="0 0 25 12" fill="none">
+              <rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="white" strokeOpacity="0.35"/>
+              <rect x="2" y="2" width="16" height="8" rx="2" fill="white"/>
+              <path d="M23 4v4a2 2 0 000-4z" fill="white" fillOpacity="0.4"/>
+            </svg>
+          </div>
+        </div>
+        <div style={{position:'absolute',top:52,left:0,right:0,bottom:0,overflow:'hidden',display:'flex',flexDirection:'column'}}>
+          {children}
+        </div>
+      </div>
+      <div style={{position:'absolute',left:-3,top:188,width:4,height:60,background:'#2a2a2a',borderRadius:'2px 0 0 2px'}}/>
+      <div style={{position:'absolute',left:-3,top:260,width:4,height:60,background:'#2a2a2a',borderRadius:'2px 0 0 2px'}}/>
+      <div style={{position:'absolute',right:-3,top:195,width:4,height:76,background:'#2a2a2a',borderRadius:'0 2px 2px 0'}}/>
+      <div style={{position:'absolute',bottom:9,left:'50%',transform:'translateX(-50%)',width:130,height:5,borderRadius:3,background:'rgba(255,255,255,0.2)'}}/>
+    </div>
+  );
+}
+
+// ── Bottom Sheet ──────────────────────────────────────────────────
+function Sheet({ open, onClose, title, children, maxH='78%' }) {
+  if (!open) return null;
+  return (
+    <div style={{position:'absolute',inset:0,zIndex:400,display:'flex',flexDirection:'column',justifyContent:'flex-end'}}>
+      <div onClick={onClose} style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.55)',backdropFilter:'blur(4px)',animation:'fadeIn 0.2s'}}/>
+      <div style={{position:'relative',zIndex:1,background:C.surfaceHigh,borderRadius:'22px 22px 0 0',
+        borderTop:`1px solid ${C.borderMid}`,maxHeight:maxH,display:'flex',flexDirection:'column',
+        animation:'slideUp 0.32s cubic-bezier(0.16,1,0.3,1)'}}>
+        <div style={{display:'flex',justifyContent:'center',padding:'10px 0 8px',flexShrink:0}}>
+          <div style={{width:36,height:4,borderRadius:2,background:'rgba(255,255,255,0.18)'}}/>
+        </div>
+        {title && <div style={{fontSize:15,fontWeight:600,color:C.text,padding:'0 20px 14px',flexShrink:0}}>{title}</div>}
+        <div style={{overflowY:'auto',padding:'0 20px 28px',flex:1}}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// ── Bar Chart ─────────────────────────────────────────────────────
+function BarChart({ stats, cats, maxAmt, showPct, total }) {
+  const [rdy, setRdy] = useState(false);
+  useEffect(()=>{ const t=setTimeout(()=>setRdy(true),80); return ()=>clearTimeout(t); },[stats]);
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:11}}>
+      {stats.map((s,i)=>{
+        const cat = cats.find(c=>c.id===s.id)||{label:s.id,color:'#78909c',icon:'📌'};
+        const pct = rdy ? Math.max((s.total/maxAmt)*100,2) : 0;
+        return (
+          <div key={s.id} style={{display:'flex',alignItems:'center',gap:10}}>
+            <span style={{fontSize:15,width:22,textAlign:'center',flexShrink:0}}>{cat.icon}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{display:'flex',justifyContent:'space-between',marginBottom:5}}>
+                <span style={{fontSize:12,color:C.textDim}}>{cat.label}</span>
+                <span style={{fontSize:12,color:C.textDim,fontWeight:500}}>
+                  {fmt(s.total)}{showPct && total ? <span style={{color:C.textMuted}}> · {Math.round(s.total/total*100)}%</span> : null}
+                </span>
+              </div>
+              <div style={{height:4,background:'rgba(255,255,255,0.07)',borderRadius:10,overflow:'hidden'}}>
+                <div style={{height:'100%',borderRadius:10,width:`${pct}%`,
+                  background:`linear-gradient(90deg,${cat.color}70,${cat.color})`,
+                  transition:`width 0.65s cubic-bezier(0.16,1,0.3,1) ${i*55}ms`}}/>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Donut Chart ───────────────────────────────────────────────────
+function DonutChart({ stats, cats }) {
+  const total = stats.reduce((s,c)=>s+c.total,0)||1;
+  const R=52, CX=64, CY=64, SW=18;
+  const circ = 2*Math.PI*R;
+  let off=0;
+  const slices = stats.slice(0,6).map(s=>{
+    const cat=cats.find(c=>c.id===s.id)||{color:'#78909c',icon:'📌',label:s.id};
+    const dash=(s.total/total)*circ;
+    const so=circ-off; off+=dash;
+    return {...cat,total:s.total,dash,gap:circ-dash,startOffset:so};
+  });
+  return (
+    <div style={{display:'flex',alignItems:'center',gap:16}}>
+      <svg width="128" height="128" viewBox="0 0 128 128" style={{flexShrink:0}}>
+        <circle cx={CX} cy={CY} r={R} fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth={SW}/>
+        {slices.map((s,i)=>(
+          <circle key={i} cx={CX} cy={CY} r={R} fill="none"
+            stroke={s.color} strokeWidth={SW}
+            strokeDasharray={`${s.dash} ${s.gap}`}
+            strokeDashoffset={s.startOffset}/>
+        ))}
+        <text x={CX} y={CY-7} textAnchor="middle" fill={C.textMuted} fontSize="10" fontFamily="Inter,sans-serif">всего</text>
+        <text x={CX} y={CY+10} textAnchor="middle" fill={C.text} fontSize="13" fontWeight="600" fontFamily="Inter,sans-serif">{fmtK(total)}₽</text>
+      </svg>
+      <div style={{flex:1,display:'flex',flexDirection:'column',gap:8}}>
+        {slices.map((s,i)=>(
+          <div key={i} style={{display:'flex',alignItems:'center',gap:8}}>
+            <div style={{width:8,height:8,borderRadius:'50%',background:s.color,flexShrink:0}}/>
+            <span style={{fontSize:11,color:C.textDim,flex:1,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{s.label}</span>
+            <span style={{fontSize:11,color:C.textMuted,flexShrink:0}}>{Math.round(s.total/total*100)}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Expense Row ───────────────────────────────────────────────────
+function ERow({ e, cats, compact }) {
+  const cat = cats.find(c=>c.id===e.cat)||{label:e.cat,color:'#78909c',icon:'📌'};
+  return (
+    <div style={{background:C.surface,borderRadius:compact?14:16,padding:compact?'10px 12px':'12px 14px',
+      display:'flex',alignItems:'center',gap:12,border:`1px solid ${C.border}`}}>
+      <div style={{width:compact?34:38,height:compact?34:38,borderRadius:compact?10:12,flexShrink:0,
+        background:cat.color+'1a',display:'flex',alignItems:'center',justifyContent:'center',fontSize:compact?15:17}}>{cat.icon}</div>
+      <div style={{flex:1,minWidth:0}}>
+        <div style={{fontSize:compact?13:14,fontWeight:500,color:C.text,marginBottom:2}}>{e.name}</div>
+        <div style={{fontSize:11,color:C.textMuted}}>{fmtLabel(e.date)}</div>
+      </div>
+      <div style={{fontSize:compact?13:14,fontWeight:600,color:C.negative,flexShrink:0}}>−{fmt(e.amount)}</div>
+    </div>
+  );
+}
+
+// ── Drum Picker ───────────────────────────────────────────────────
+function DrumCol({ items, value, onChange }) {
+  const ref = useRef(null);
+  const idx = items.indexOf(value);
+  const ITEM_H = 42;
+
+  useEffect(()=>{
+    if (ref.current) {
+      ref.current.scrollTop = Math.max(0, idx) * ITEM_H;
+    }
+  }, []);
+
+  const handleScroll = () => {
+    if (!ref.current) return;
+    const i = Math.round(ref.current.scrollTop / ITEM_H);
+    const clamped = Math.max(0, Math.min(i, items.length-1));
+    if (items[clamped] !== value) onChange(items[clamped]);
+  };
+
+  return (
+    <div style={{position:'relative',flex:1}}>
+      {/* Selection highlight */}
+      <div style={{position:'absolute',top:'50%',left:0,right:0,height:ITEM_H,
+        transform:'translateY(-50%)',background:'rgba(59,91,219,0.12)',
+        borderRadius:10,pointerEvents:'none',zIndex:1}}/>
+      {/* Top/bottom fade */}
+      <div style={{position:'absolute',top:0,left:0,right:0,height:63,
+        background:`linear-gradient(to bottom,${C.surfaceHigh},transparent)`,pointerEvents:'none',zIndex:2}}/>
+      <div style={{position:'absolute',bottom:0,left:0,right:0,height:63,
+        background:`linear-gradient(to top,${C.surfaceHigh},transparent)`,pointerEvents:'none',zIndex:2}}/>
+      <div ref={ref} className="drum-col" onScroll={handleScroll} style={{padding:`${ITEM_H*2}px 0`}}>
+        {items.map((item,i)=>(
+          <div key={i} className={`drum-item${items.indexOf(value)===i?' active':''}`}
+            onClick={()=>{ onChange(item); if(ref.current) ref.current.scrollTop=i*ITEM_H; }}>
+            {item}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DrumPicker({ value, onChange }) {
+  // value: Date object
+  const days = Array.from({length:31},(_,i)=>i+1);
+  const months = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+  const years = Array.from({length:5},(_,i)=>new Date().getFullYear()-2+i);
+  const hours = Array.from({length:24},(_,i)=>String(i).padStart(2,'0'));
+  const mins  = Array.from({length:60},(_,i)=>String(i).padStart(2,'0'));
+
+  const update = (field, val) => {
+    const d = new Date(value);
+    if (field==='day') d.setDate(val);
+    if (field==='month') d.setMonth(months.indexOf(val));
+    if (field==='year') d.setFullYear(val);
+    if (field==='hour') d.setHours(parseInt(val));
+    if (field==='min') d.setMinutes(parseInt(val));
+    onChange(d);
+  };
+
+  return (
+    <div>
+      <div style={{display:'flex',gap:0,height:168,borderRadius:14,overflow:'hidden',background:C.surface}}>
+        <DrumCol items={days} value={value.getDate()} onChange={v=>update('day',v)}/>
+        <DrumCol items={months} value={months[value.getMonth()]} onChange={v=>update('month',v)}/>
+        <DrumCol items={years} value={value.getFullYear()} onChange={v=>update('year',v)}/>
+        <div style={{width:1,background:C.border}}/>
+        <DrumCol items={hours} value={String(value.getHours()).padStart(2,'0')} onChange={v=>update('hour',v)}/>
+        <DrumCol items={mins} value={String(value.getMinutes()).padStart(2,'0')} onChange={v=>update('min',v)}/>
+      </div>
+      <div style={{display:'flex',justifyContent:'space-between',marginTop:8,padding:'0 8px'}}>
+        {['день','месяц','год','час','мин'].map(l=>(
+          <span key={l} style={{flex:1,textAlign:'center',fontSize:10,color:C.textMuted}}>{l}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Add Expense Sheet ─────────────────────────────────────────────
+function AddSheet({ open, onClose, onAdd, cats }) {
+  const [amount, setAmount] = useState('');
+  const [selCat, setSelCat] = useState('food');
+  const [comment, setComment] = useState('');
+  const [date, setDate] = useState(new Date());
+  const [showCatPick, setShowCatPick] = useState(false);
+  const [showDatePick, setShowDatePick] = useState(false);
+  const amtRef = useRef(null);
+
+  useEffect(()=>{
+    if (open) {
+      setAmount(''); setComment(''); setDate(new Date());
+      setTimeout(()=>{ if(amtRef.current) amtRef.current.focus(); },350);
+    }
+  },[open]);
+
+  const submit = () => {
+    const n = parseFloat(amount);
+    if (!n||n<=0) return;
+    const cat = cats.find(c=>c.id===selCat)||cats[0];
+    onAdd({cat:selCat, name:comment.trim()||cat.label, amount:n, date:new Date(date)});
+    onClose();
+  };
+
+  const cat = cats.find(c=>c.id===selCat)||cats[0];
+  const dateStr = date.toLocaleDateString('ru-RU',{day:'numeric',month:'short'})+' '+hhmm(date);
+
+  if (!open) return null;
+  return (
+    <div style={{position:'absolute',inset:0,zIndex:400,display:'flex',flexDirection:'column',justifyContent:'flex-end'}}>
+      <div onClick={onClose} style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.55)',backdropFilter:'blur(4px)',animation:'fadeIn 0.2s'}}/>
+      <div style={{position:'relative',zIndex:1,background:C.surfaceHigh,borderRadius:'22px 22px 0 0',
+        borderTop:`1px solid ${C.borderMid}`,animation:'slideUp 0.32s cubic-bezier(0.16,1,0.3,1)'}}>
+        <div style={{display:'flex',justifyContent:'center',padding:'10px 0 6px'}}>
+          <div style={{width:36,height:4,borderRadius:2,background:'rgba(255,255,255,0.18)'}}/>
+        </div>
+        <div style={{padding:'0 20px 28px'}}>
+          {/* Amount */}
+          <div style={{display:'flex',alignItems:'center',gap:10,marginBottom:14}}>
+            <div style={{flex:1,display:'flex',alignItems:'baseline',gap:6,
+              background:C.surfaceTop,borderRadius:12,padding:'12px 14px'}}>
+              <input ref={amtRef} type="number" inputMode="decimal" placeholder="0"
+                value={amount} onChange={e=>setAmount(e.target.value)}
+                style={{flex:1,background:'none',border:'none',color:C.text,
+                  fontSize:32,fontWeight:300,outline:'none',letterSpacing:'-1px',
+                  fontFamily:'Inter,sans-serif',width:0,minWidth:0}}/>
+              <span style={{fontSize:22,color:C.textMuted,fontWeight:300}}>₽</span>
+            </div>
+            {/* Mic */}
+            <div style={{width:44,height:44,borderRadius:'50%',background:C.surfaceTop,
+              display:'flex',alignItems:'center',justifyContent:'center',opacity:0.35,flexShrink:0}}>
+              <svg width="14" height="18" viewBox="0 0 14 18" fill="none">
+                <rect x="4" y="0.5" width="6" height="10" rx="3" stroke={C.textMuted} strokeWidth="1.4"/>
+                <path d="M1 9a6 6 0 0012 0" stroke={C.textMuted} strokeWidth="1.4" strokeLinecap="round"/>
+                <line x1="7" y1="15" x2="7" y2="17.5" stroke={C.textMuted} strokeWidth="1.4" strokeLinecap="round"/>
+              </svg>
+            </div>
+          </div>
+
+          {/* Pills row */}
+          <div style={{display:'flex',gap:8,marginBottom:12}}>
+            <button onClick={()=>setShowCatPick(true)} style={{
+              display:'flex',alignItems:'center',gap:7,
+              background:cat.color+'20',border:`1px solid ${cat.color}44`,
+              borderRadius:20,padding:'7px 14px',cursor:'pointer',
+              fontSize:13,color:C.text,fontFamily:'Inter,sans-serif',fontWeight:500}}>
+              <span>{cat.icon}</span><span>{cat.label}</span>
+            </button>
+            <button onClick={()=>setShowDatePick(true)} style={{
+              display:'flex',alignItems:'center',gap:6,
+              background:C.surfaceTop,border:`1px solid ${C.border}`,
+              borderRadius:20,padding:'7px 14px',cursor:'pointer',
+              fontSize:13,color:C.textDim,fontFamily:'Inter,sans-serif'}}>
+              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke={C.textMuted} strokeWidth="1.5"><rect x="1" y="3" width="14" height="12" rx="2"/><path d="M5 1v4M11 1v4M1 7h14"/></svg>
+              <span>{dateStr}</span>
+            </button>
+          </div>
+
+          {/* Comment */}
+          <input type="text" placeholder="Комментарий..." value={comment} onChange={e=>setComment(e.target.value)}
+            style={{width:'100%',background:C.surfaceTop,border:`1px solid ${C.border}`,
+              borderRadius:12,padding:'11px 14px',color:C.text,fontSize:14,
+              outline:'none',fontFamily:'Inter,sans-serif',marginBottom:14}}/>
+
+          {/* Submit */}
+          <button onClick={submit} style={{
+            width:'100%',background:amount?C.accent:C.surfaceTop,
+            border:`1px solid ${amount?C.accent:C.border}`,borderRadius:14,
+            padding:'14px',color:amount?'white':C.textMuted,
+            fontSize:15,fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif',
+            transition:'all 0.2s'}}>Добавить</button>
+        </div>
+      </div>
+
+      {/* Category sheet (nested) */}
+      {showCatPick && (
+        <div style={{position:'absolute',inset:0,zIndex:500,display:'flex',flexDirection:'column',justifyContent:'flex-end'}}>
+          <div onClick={()=>setShowCatPick(false)} style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.4)'}}/>
+          <div style={{position:'relative',zIndex:1,background:C.bg,borderRadius:'22px 22px 0 0',
+            borderTop:`1px solid ${C.borderMid}`,padding:'10px 20px 32px',
+            animation:'slideUp 0.25s cubic-bezier(0.16,1,0.3,1)'}}>
+            <div style={{display:'flex',justifyContent:'center',marginBottom:14}}>
+              <div style={{width:36,height:4,borderRadius:2,background:'rgba(255,255,255,0.18)'}}/>
+            </div>
+            <div style={{fontSize:15,fontWeight:600,color:C.text,marginBottom:14}}>Категория</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:10}}>
+              {cats.map(c=>(
+                <button key={c.id} onClick={()=>{setSelCat(c.id);setShowCatPick(false);}} style={{
+                  background:selCat===c.id?c.color+'22':C.surface,
+                  border:`1.5px solid ${selCat===c.id?c.color+'55':C.border}`,
+                  borderRadius:14,padding:'12px 4px 10px',
+                  display:'flex',flexDirection:'column',alignItems:'center',gap:5,cursor:'pointer'}}>
+                  <span style={{fontSize:22}}>{c.icon}</span>
+                  <span style={{fontSize:10,color:selCat===c.id?c.color:C.textMuted,
+                    fontFamily:'Inter,sans-serif',textAlign:'center',lineHeight:1.2}}>{c.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Date drum picker (nested) */}
+      {showDatePick && (
+        <div style={{position:'absolute',inset:0,zIndex:500,display:'flex',flexDirection:'column',justifyContent:'flex-end'}}>
+          <div onClick={()=>setShowDatePick(false)} style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.4)'}}/>
+          <div style={{position:'relative',zIndex:1,background:C.surfaceHigh,borderRadius:'22px 22px 0 0',
+            borderTop:`1px solid ${C.borderMid}`,padding:'10px 20px 28px',
+            animation:'slideUp 0.25s cubic-bezier(0.16,1,0.3,1)'}}>
+            <div style={{display:'flex',justifyContent:'center',marginBottom:14}}>
+              <div style={{width:36,height:4,borderRadius:2,background:'rgba(255,255,255,0.18)'}}/>
+            </div>
+            <div style={{fontSize:15,fontWeight:600,color:C.text,marginBottom:14}}>Дата и время</div>
+            <DrumPicker value={date} onChange={setDate}/>
+            <button onClick={()=>setShowDatePick(false)} style={{
+              width:'100%',marginTop:16,background:C.accent,border:'none',borderRadius:12,
+              padding:'13px',color:'white',fontSize:15,fontWeight:600,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>
+              Готово
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Home Screen ───────────────────────────────────────────────────
+function HomeScreen({ expenses, cats, setTab }) {
+  const [period, setPeriod] = useState('month');
+  const [mode, setMode] = useState('bar');
+  const filtered = byPeriod(expenses, period);
+  const total = filtered.reduce((s,e)=>s+e.amount,0);
+  const stats = catStats(filtered);
+  const maxA = stats[0]?.total||1;
+  const recent = [...expenses].sort((a,b)=>b.date-a.date).slice(0,4);
+  const PERIODS = [{id:'day',l:'День'},{id:'week',l:'Неделя'},{id:'month',l:'Месяц'}];
+  const hint = {day:'сегодня',week:'за неделю',month:'за месяц'}[period];
+
+  return (
+    <div style={{flex:1,overflowY:'auto',padding:'16px 18px 12px'}}>
+      {/* Header */}
+      <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',marginBottom:16}}>
+        <div>
+          <div style={{fontSize:11,color:C.textMuted,fontWeight:300,letterSpacing:'0.04em',textTransform:'uppercase'}}>Добро пожаловать</div>
+          <div style={{fontSize:22,fontWeight:600,color:C.text,letterSpacing:'-0.5px'}}>Мирон</div>
+        </div>
+        <div style={{display:'flex',background:C.surfaceHigh,borderRadius:10,padding:3,border:`1px solid ${C.border}`,gap:2}}>
+          {PERIODS.map(p=>(
+            <button key={p.id} onClick={()=>setPeriod(p.id)} style={{
+              padding:'5px 9px',borderRadius:7,border:'none',cursor:'pointer',
+              fontSize:11,fontWeight:500,fontFamily:'Inter,sans-serif',
+              background:period===p.id?C.accent:'transparent',
+              color:period===p.id?'white':C.textMuted,transition:'all 0.18s'}}>{p.l}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Total */}
+      <div style={{marginBottom:14}}>
+        <div style={{fontSize:11,color:C.textMuted,fontWeight:300,marginBottom:3,letterSpacing:'0.04em',textTransform:'uppercase'}}>Расходы {hint}</div>
+        <div style={{fontSize:42,fontWeight:300,color:C.text,letterSpacing:'-2px',lineHeight:1}}>{fmt(total)}</div>
+      </div>
+
+      {/* Chart card */}
+      <div style={{background:C.surface,borderRadius:18,padding:'14px 16px',border:`1px solid ${C.border}`,marginBottom:12}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:14}}>
+          <span style={{fontSize:13,fontWeight:600,color:C.text}}>По категориям</span>
+          <div style={{display:'flex',gap:4}}>
+            {[['bar','≡'],['donut','◎']].map(([m,ic])=>(
+              <button key={m} onClick={()=>setMode(m)} style={{
+                width:28,height:28,borderRadius:8,border:'none',cursor:'pointer',
+                background:mode===m?C.accent+'28':C.surfaceHigh,
+                color:mode===m?C.accent:C.textMuted,fontSize:14,
+                display:'flex',alignItems:'center',justifyContent:'center',fontFamily:'monospace'}}>{ic}</button>
+            ))}
+          </div>
+        </div>
+        {stats.length > 0
+          ? mode==='bar'
+            ? <BarChart key={period+'b'} stats={stats.slice(0,5)} cats={cats} maxAmt={maxA}/>
+            : <DonutChart key={period+'d'} stats={stats} cats={cats}/>
+          : <div style={{textAlign:'center',padding:'16px 0',color:C.textMuted,fontSize:13}}>Нет данных</div>
+        }
+        <button onClick={()=>setTab('analytics')} style={{
+          marginTop:12,background:'none',border:'none',color:C.accent,
+          fontSize:12,fontWeight:500,cursor:'pointer',fontFamily:'Inter,sans-serif',padding:0}}>
+          Подробнее →
+        </button>
+      </div>
+
+      {/* Recent */}
+      <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:10}}>
+        <span style={{fontSize:13,fontWeight:600,color:C.text}}>Последние траты</span>
+        <button onClick={()=>setTab('history')} style={{background:'none',border:'none',color:C.accent,
+          fontSize:12,fontWeight:500,cursor:'pointer',fontFamily:'Inter,sans-serif'}}>Все →</button>
+      </div>
+      <div style={{display:'flex',flexDirection:'column',gap:7}}>
+        {recent.map(e=><ERow key={e.id} e={e} cats={cats} compact/>)}
+      </div>
+    </div>
+  );
+}
+
+// ── History Screen ────────────────────────────────────────────────
+function HistoryScreen({ expenses, cats }) {
+  const [fCat, setFCat] = useState(null);
+  const [fSort, setFSort] = useState('date');
+  const [sCat, setSCat] = useState(false);
+  const [sSort, setSSort] = useState(false);
+
+  let list = fCat ? expenses.filter(e=>e.cat===fCat) : expenses;
+  list = [...list].sort((a,b)=>fSort==='amount'?b.amount-a.amount:b.date-a.date);
+  const groups = groupDays(list);
+  const tot = list.reduce((s,e)=>s+e.amount,0);
+
+  return (
+    <div style={{flex:1,display:'flex',flexDirection:'column',overflow:'hidden'}}>
+      <div style={{padding:'16px 18px 10px',flexShrink:0}}>
+        <div style={{fontSize:20,fontWeight:600,color:C.text,letterSpacing:'-0.5px',marginBottom:12}}>История</div>
+        <div style={{display:'flex',gap:8,overflowX:'auto',paddingBottom:2}}>
+          <button onClick={()=>setSCat(true)} style={{
+            flexShrink:0,display:'flex',alignItems:'center',gap:5,
+            background:fCat?C.accent+'22':C.surfaceHigh,
+            border:`1px solid ${fCat?C.accent+'55':C.border}`,
+            borderRadius:20,padding:'6px 12px',cursor:'pointer',
+            fontSize:12,color:fCat?C.accent:C.textDim,fontFamily:'Inter,sans-serif'}}>
+            {fCat?(cats.find(c=>c.id===fCat)||{icon:'📁',label:'Кат.'}).icon+' '+(cats.find(c=>c.id===fCat)||{label:'Кат.'}).label:'📁 Категория'}
+            {fCat?<span onClick={e=>{e.stopPropagation();setFCat(null);}} style={{color:C.textMuted,marginLeft:2}}>✕</span>:<span style={{color:C.textMuted}}>▾</span>}
+          </button>
+          <button onClick={()=>setSSort(true)} style={{
+            flexShrink:0,display:'flex',alignItems:'center',gap:5,
+            background:fSort!=='date'?C.accent+'22':C.surfaceHigh,
+            border:`1px solid ${fSort!=='date'?C.accent+'55':C.border}`,
+            borderRadius:20,padding:'6px 12px',cursor:'pointer',
+            fontSize:12,color:fSort!=='date'?C.accent:C.textDim,fontFamily:'Inter,sans-serif'}}>
+            {fSort==='date'?'📅 Дата':'💰 По сумме'} <span style={{color:C.textMuted}}>▾</span>
+          </button>
+          {tot>0&&<div style={{marginLeft:'auto',flexShrink:0,display:'flex',alignItems:'center',fontSize:12,color:C.textMuted}}>{list.length} · {fmt(tot)}</div>}
+        </div>
+      </div>
+      <div style={{flex:1,overflowY:'auto',padding:'0 18px 16px'}}>
+        {groups.map(g=>(
+          <div key={g.label} style={{marginBottom:16}}>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:8}}>
+              <span style={{fontSize:12,color:C.textMuted}}>{g.label}</span>
+              <span style={{fontSize:12,color:C.textMuted}}>−{fmt(g.total)}</span>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:6}}>
+              {g.items.map(e=><ERow key={e.id} e={e} cats={cats} compact/>)}
+            </div>
+          </div>
+        ))}
+        {groups.length===0&&<div style={{textAlign:'center',padding:'40px 0',color:C.textMuted,fontSize:14}}>Ничего не найдено</div>}
+      </div>
+      <Sheet open={sCat} onClose={()=>setSCat(false)} title="Фильтр по категории">
+        <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,paddingBottom:4}}>
+          {cats.map(c=>(
+            <button key={c.id} onClick={()=>{setFCat(c.id);setSCat(false);}} style={{
+              background:fCat===c.id?c.color+'22':C.surface,
+              border:`1.5px solid ${fCat===c.id?c.color+'55':C.border}`,
+              borderRadius:12,padding:'10px 4px 8px',
+              display:'flex',flexDirection:'column',alignItems:'center',gap:5,cursor:'pointer'}}>
+              <span style={{fontSize:20}}>{c.icon}</span>
+              <span style={{fontSize:10,color:fCat===c.id?c.color:C.textMuted,fontFamily:'Inter,sans-serif',textAlign:'center'}}>{c.label}</span>
+            </button>
+          ))}
+        </div>
+      </Sheet>
+      <Sheet open={sSort} onClose={()=>setSSort(false)} title="Сортировка">
+        {[['date','По дате','📅'],['amount','По сумме','💰']].map(([id,lbl,ic])=>(
+          <button key={id} onClick={()=>{setFSort(id);setSSort(false);}} style={{
+            width:'100%',display:'flex',alignItems:'center',gap:12,
+            background:fSort===id?C.accent+'18':C.surface,
+            border:`1px solid ${fSort===id?C.accent+'44':C.border}`,
+            borderRadius:14,padding:'13px 16px',marginBottom:8,
+            cursor:'pointer',color:fSort===id?C.accent:C.textDim,
+            fontSize:14,fontFamily:'Inter,sans-serif'}}>
+            <span style={{fontSize:18}}>{ic}</span>
+            <span style={{flex:1,textAlign:'left'}}>{lbl}</span>
+            {fSort===id&&<span>✓</span>}
+          </button>
+        ))}
+      </Sheet>
+    </div>
+  );
+}
+
+// ── Analytics Screen ──────────────────────────────────────────────
+function AnalyticsScreen({ expenses, cats }) {
+  const [period, setPeriod] = useState('month');
+  const PERIODS = [{id:'week',l:'Нед.'},{id:'month',l:'Месяц'},{id:'quarter',l:'Квартал'}];
+  const curDays = {week:7,month:30,quarter:90}[period];
+  const prevDays = {week:14,month:60,quarter:180}[period];
+  const cur = byPeriod(expenses, period);
+  const prev = expenses.filter(e=>{const d=(NOW-e.date)/86400000; return d>=curDays&&d<prevDays;});
+  const curTot  = cur.reduce((s,e)=>s+e.amount,0);
+  const prevTot = prev.reduce((s,e)=>s+e.amount,0);
+  const delta   = prevTot>0?Math.round((curTot-prevTot)/prevTot*100):0;
+  const deltaAmt = curTot-prevTot;
+  const avgDay  = curTot>0?Math.round(curTot/curDays):0;
+  const avgTxn  = cur.length>0?Math.round(curTot/cur.length):0;
+  const stats   = catStats(cur);
+  const maxA    = stats[0]?.total||1;
+  const total   = cur.reduce((s,e)=>s+e.amount,0);
+  const top3    = [...cur].sort((a,b)=>b.amount-a.amount).slice(0,3);
+
+  return (
+    <div style={{flex:1,overflowY:'auto'}}>
+      <div style={{padding:'16px 18px 0'}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16}}>
+          <div style={{fontSize:20,fontWeight:600,color:C.text,letterSpacing:'-0.5px'}}>Аналитика</div>
+          <div style={{display:'flex',background:C.surfaceHigh,borderRadius:10,padding:3,border:`1px solid ${C.border}`,gap:2}}>
+            {PERIODS.map(p=>(
+              <button key={p.id} onClick={()=>setPeriod(p.id)} style={{
+                padding:'5px 9px',borderRadius:7,border:'none',cursor:'pointer',
+                fontSize:11,fontWeight:500,fontFamily:'Inter,sans-serif',
+                background:period===p.id?C.accent:'transparent',
+                color:period===p.id?'white':C.textMuted,transition:'all 0.18s'}}>{p.l}</button>
+            ))}
+          </div>
+        </div>
+
+        {/* Comparison */}
+        <div style={{background:C.surface,borderRadius:18,padding:'16px',border:`1px solid ${C.border}`,marginBottom:10}}>
+          <div style={{fontSize:11,color:C.textMuted,marginBottom:10,textTransform:'uppercase',letterSpacing:'0.05em'}}>Сравнение периодов</div>
+          <div style={{display:'flex',gap:12,alignItems:'flex-end',marginBottom:12}}>
+            <div style={{flex:1}}>
+              <div style={{fontSize:11,color:C.textMuted,marginBottom:4}}>Текущий</div>
+              <div style={{fontSize:28,fontWeight:300,color:C.text,letterSpacing:'-1px'}}>{fmt(curTot)}</div>
+            </div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:11,color:C.textMuted,marginBottom:4}}>Предыдущий</div>
+              <div style={{fontSize:22,fontWeight:300,color:C.textDim,letterSpacing:'-1px'}}>{fmt(prevTot)}</div>
+            </div>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <div style={{flex:1,height:4,background:'rgba(255,255,255,0.07)',borderRadius:4,overflow:'hidden'}}>
+              <div style={{height:'100%',borderRadius:4,transition:'width 0.6s ease',
+                width:`${Math.min(curTot/(Math.max(curTot,prevTot)||1)*100,100)}%`,
+                background:delta>0?C.negative:'#4caf50'}}/>
+            </div>
+            <div style={{flexShrink:0,fontSize:13,fontWeight:600,color:delta>0?C.negative:'#4caf50'}}>
+              {delta>0?'+':''}{delta}% ({deltaAmt>0?'+':''}{fmt(deltaAmt)})
+            </div>
+          </div>
+        </div>
+
+        {/* Two mini cards */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8,marginBottom:10}}>
+          {[{l:'В среднем за день',v:fmt(avgDay)},{l:'Средняя трата',v:fmt(avgTxn)}].map((s,i)=>(
+            <div key={i} style={{background:C.surface,borderRadius:16,padding:'14px',border:`1px solid ${C.border}`}}>
+              <div style={{fontSize:11,color:C.textMuted,marginBottom:6}}>{s.l}</div>
+              <div style={{fontSize:20,fontWeight:300,color:C.text,letterSpacing:'-0.5px'}}>{s.v}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Cat bars */}
+        {stats.length>0&&(
+          <div style={{background:C.surface,borderRadius:18,padding:'14px 16px',border:`1px solid ${C.border}`,marginBottom:10}}>
+            <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:14}}>По категориям</div>
+            <BarChart key={period} stats={stats} cats={cats} maxAmt={maxA} showPct total={total}/>
+          </div>
+        )}
+
+        {/* Top 3 */}
+        {top3.length>0&&(
+          <div style={{background:C.surface,borderRadius:18,padding:'14px 16px',border:`1px solid ${C.border}`,marginBottom:16}}>
+            <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:12}}>Топ-3 трат</div>
+            <div style={{display:'flex',flexDirection:'column',gap:10}}>
+              {top3.map((e,i)=>{
+                const cat=cats.find(c=>c.id===e.cat)||{icon:'📌'};
+                return (
+                  <div key={e.id} style={{display:'flex',alignItems:'center',gap:12}}>
+                    <div style={{width:22,height:22,borderRadius:6,background:C.surfaceTop,
+                      display:'flex',alignItems:'center',justifyContent:'center',
+                      fontSize:11,color:C.textMuted,fontWeight:600,flexShrink:0}}>{i+1}</div>
+                    <span style={{fontSize:15,flexShrink:0}}>{cat.icon}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:13,color:C.textDim,whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{e.name}</div>
+                      <div style={{fontSize:11,color:C.textMuted}}>{fmtLabel(e.date)}</div>
+                    </div>
+                    <div style={{fontSize:14,fontWeight:600,color:C.negative,flexShrink:0}}>−{fmt(e.amount)}</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Profile Screen ────────────────────────────────────────────────
+function ProfileScreen({ cats, setCats, expenses }) {
+  const [editCat, setEditCat] = useState(null); // cat being edited
+  const [addSheet, setAddSheet] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newIcon, setNewIcon] = useState('📌');
+  const [newColor, setNewColor] = useState('#78909c');
+  const total = expenses.reduce((s,e)=>s+e.amount,0);
+
+  const openEdit = (cat) => {
+    setEditCat(cat);
+    setNewName(cat.label);
+    setNewIcon(cat.icon);
+    setNewColor(cat.color);
+  };
+  const openAdd = () => {
+    setEditCat(null);
+    setNewName('');
+    setNewIcon('📌');
+    setNewColor('#78909c');
+    setAddSheet(true);
+  };
+  const saveEdit = () => {
+    if (!newName.trim()) return;
+    setCats(prev=>prev.map(c=>c.id===editCat.id?{...c,label:newName.trim(),icon:newIcon,color:newColor}:c));
+    setEditCat(null);
+  };
+  const delCat = () => {
+    setCats(prev=>prev.filter(c=>c.id!==editCat.id));
+    setEditCat(null);
+  };
+  const addCat = () => {
+    if (!newName.trim()) return;
+    setCats(prev=>[...prev,{id:'cat_'+Date.now(),label:newName.trim(),icon:newIcon,color:newColor}]);
+    setAddSheet(false);
+  };
+
+  const EditorContent = ({onSave, onDel, saveLabel}) => (
+    <div>
+      <div style={{fontSize:12,color:C.textMuted,marginBottom:6}}>Название</div>
+      <input type="text" value={newName} onChange={e=>setNewName(e.target.value)}
+        placeholder="Название категории"
+        style={{width:'100%',background:C.surface,border:`1px solid ${C.borderMid}`,
+          borderRadius:10,padding:'10px 14px',color:C.text,fontSize:14,
+          outline:'none',fontFamily:'Inter,sans-serif',marginBottom:14}}/>
+      <div style={{fontSize:12,color:C.textMuted,marginBottom:8}}>Иконка</div>
+      <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:14}}>
+        {ICON_OPTIONS.map(ic=>(
+          <button key={ic} onClick={()=>setNewIcon(ic)} style={{
+            width:40,height:40,borderRadius:10,border:`1.5px solid ${newIcon===ic?C.accent+'66':C.border}`,
+            background:newIcon===ic?C.accent+'18':C.surface,fontSize:20,cursor:'pointer'}}>
+            {ic}
+          </button>
+        ))}
+      </div>
+      <div style={{fontSize:12,color:C.textMuted,marginBottom:8}}>Цвет</div>
+      <div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:18}}>
+        {COLOR_OPTIONS.map(cl=>(
+          <button key={cl} onClick={()=>setNewColor(cl)} style={{
+            width:34,height:34,borderRadius:'50%',border:`2px solid ${newColor===cl?'white':'transparent'}`,
+            background:cl,cursor:'pointer',outline:'none'}}>
+          </button>
+        ))}
+      </div>
+      <button onClick={onSave} style={{
+        width:'100%',background:C.accent,border:'none',borderRadius:12,
+        padding:'13px',color:'white',fontSize:14,fontWeight:600,cursor:'pointer',
+        fontFamily:'Inter,sans-serif',marginBottom:8}}>{saveLabel}</button>
+      {onDel&&<button onClick={onDel} style={{
+        width:'100%',background:'rgba(255,87,87,0.1)',border:'1px solid rgba(255,87,87,0.3)',
+        borderRadius:12,padding:'13px',color:C.negative,fontSize:14,fontWeight:600,
+        cursor:'pointer',fontFamily:'Inter,sans-serif'}}>Удалить категорию</button>}
+    </div>
+  );
+
+  return (
+    <div style={{flex:1,overflowY:'auto',padding:'16px 18px'}}>
+      <div style={{fontSize:20,fontWeight:600,color:C.text,letterSpacing:'-0.5px',marginBottom:16}}>Профиль</div>
+      {/* Avatar */}
+      <div style={{background:C.surface,borderRadius:20,padding:'16px',border:`1px solid ${C.border}`,marginBottom:12,display:'flex',alignItems:'center',gap:14}}>
+        <div style={{width:52,height:52,borderRadius:18,background:C.accent+'28',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,flexShrink:0}}>М</div>
+        <div>
+          <div style={{fontSize:17,fontWeight:600,color:C.text}}>Мирон</div>
+          <div style={{fontSize:12,color:C.textMuted}}>{expenses.length} записей · {fmt(total)}</div>
+        </div>
+      </div>
+
+      {/* Categories */}
+      <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:10}}>Категории</div>
+      <div style={{display:'flex',flexDirection:'column',gap:6,marginBottom:10}}>
+        {cats.map(cat=>(
+          <div key={cat.id} onClick={()=>openEdit(cat)} style={{
+            background:C.surface,borderRadius:14,padding:'12px 14px',
+            display:'flex',alignItems:'center',gap:12,cursor:'pointer',
+            border:`1px solid ${C.border}`}}>
+            <div style={{width:36,height:36,borderRadius:10,background:cat.color+'1a',
+              display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>{cat.icon}</div>
+            <div style={{flex:1}}>
+              <div style={{fontSize:14,fontWeight:500,color:C.text}}>{cat.label}</div>
+            </div>
+            <div style={{width:8,height:8,borderRadius:'50%',background:cat.color,flexShrink:0}}/>
+            <span style={{color:C.textMuted,fontSize:14}}>›</span>
+          </div>
+        ))}
+      </div>
+      <button onClick={openAdd} style={{
+        width:'100%',background:C.surfaceHigh,border:`1.5px dashed ${C.borderMid}`,
+        borderRadius:14,padding:'12px',color:C.textDim,fontSize:14,
+        cursor:'pointer',fontFamily:'Inter,sans-serif',marginBottom:16}}>
+        + Добавить категорию
+      </button>
+      <div style={{textAlign:'center',fontSize:11,color:C.textMuted}}>MoneySpender v4.0</div>
+
+      {/* Edit sheet */}
+      <Sheet open={!!editCat} onClose={()=>setEditCat(null)} title="Редактировать категорию">
+        <EditorContent onSave={saveEdit} onDel={delCat} saveLabel="Сохранить"/>
+      </Sheet>
+      {/* Add sheet */}
+      <Sheet open={addSheet} onClose={()=>setAddSheet(false)} title="Новая категория">
+        <EditorContent onSave={addCat} onDel={null} saveLabel="Создать"/>
+      </Sheet>
+    </div>
+  );
+}
+
+// ── Bottom Nav ────────────────────────────────────────────────────
+function BottomNav({ active, onChange, onAdd }) {
+  const tabs = [
+    {id:'home', l:'Главная', icon:(a)=><svg width="22" height="22" viewBox="0 0 24 24" fill={a?C.accent:'none'} stroke={a?C.accent:C.textMuted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>},
+    {id:'history', l:'История', icon:(a)=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.accent:C.textMuted} strokeWidth="1.8" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>},
+    {id:'fab'},
+    {id:'analytics', l:'Анализ', icon:(a)=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.accent:C.textMuted} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>},
+    {id:'profile', l:'Профиль', icon:(a)=><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?C.accent:C.textMuted} strokeWidth="1.8" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>},
+  ];
+  return (
+    <div style={{flexShrink:0,background:C.surface,borderTop:`1px solid ${C.border}`,
+      display:'flex',alignItems:'center',padding:'8px 0 18px'}}>
+      {tabs.map(t=>{
+        if (t.id==='fab') return (
+          <div key="fab" style={{flex:1,display:'flex',justifyContent:'center'}}>
+            <button onClick={onAdd} style={{
+              width:52,height:52,borderRadius:'50%',
+              background:`linear-gradient(135deg,#5b78ff,${C.accent})`,
+              border:'none',cursor:'pointer',
+              display:'flex',alignItems:'center',justifyContent:'center',
+              boxShadow:`0 6px 24px rgba(59,91,219,0.5)`,
+              transform:'translateY(-10px)'}}>
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+          </div>
+        );
+        const a=active===t.id;
+        return (
+          <button key={t.id} onClick={()=>onChange(t.id)} style={{
+            flex:1,background:'none',border:'none',cursor:'pointer',
+            display:'flex',flexDirection:'column',alignItems:'center',gap:4,padding:'5px 0',
+            color:a?C.accent:C.textMuted,fontFamily:'Inter,sans-serif',transition:'color 0.15s'}}>
+            {t.icon(a)}
+            <span style={{fontSize:10,fontWeight:a?500:400}}>{t.l}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── App Root ──────────────────────────────────────────────────────
+function App() {
+  const [expenses, setExpenses] = useState(SAMPLE);
+  const [cats, setCats]         = useState(DEFAULT_CATS);
+  const [tab, setTab]           = useState('home');
+  const [showAdd, setShowAdd]   = useState(false);
+
+  const addExpense = (exp) => setExpenses(prev=>[{...exp,id:Date.now()},...prev]);
+
+  const screens = {
+    home:      <HomeScreen     expenses={expenses} cats={cats} setTab={setTab}/>,
+    history:   <HistoryScreen  expenses={expenses} cats={cats}/>,
+    analytics: <AnalyticsScreen expenses={expenses} cats={cats}/>,
+    profile:   <ProfileScreen  expenses={expenses} cats={cats} setCats={setCats}/>,
+  };
+
+  return (
+    <div style={{width:'100%',height:'100%',display:'flex',flexDirection:'column',
+      fontFamily:"'Inter',sans-serif",background:C.bg,position:'relative'}}>
+      {screens[tab]}
+      <BottomNav active={tab} onChange={setTab} onAdd={()=>setShowAdd(true)}/>
+      <AddSheet open={showAdd} onClose={()=>setShowAdd(false)} onAdd={addExpense} cats={cats}/>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <div style={{display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh'}}>
+    <IPhoneFrame><App/></IPhoneFrame>
+  </div>
+);
+</script>
+</body>
+</html>

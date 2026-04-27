@@ -1,50 +1,57 @@
-# Welcome to your Expo app 👋
+# MoneySpender
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Личное приложение учёта трат. Тёмная тема, русский интерфейс. Цель MVP — быстрый ввод трат, обзор по категориям, базовая аналитика.
 
-## Get started
+## Стек
 
-1. Install dependencies
+- **React Native + Expo SDK 54** — кросс-платформенный фреймворк
+- **Expo Router v6** — file-based навигация (web/iOS/Android)
+- **TypeScript** — строгая типизация
+- **Zustand** — глобальное состояние
+- **Supabase** — БД (без auth в MVP)
+- **react-native-reanimated v4** — анимации (bottom sheets, прогресс-бары)
+- **react-native-gesture-handler** — жесты, swipe-to-delete
+- **react-native-svg** — donut chart
+- **@expo-google-fonts/inter** — шрифт Inter
+- **date-fns** — работа с датами
+- **@expo/vector-icons** (Feather) — иконки навигации
 
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## Запуск
 
 ```bash
-npm run reset-project
+npm install
+npm run web      # браузер (iPhone-фрейм 390×844)
+npm run ios      # iOS симулятор
+npm run android  # Android эмулятор
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+## Структура проекта
 
-## Learn more
+```
+moneyspender/
+├── app/              # Expo Router — экраны и роуты
+├── components/       # UI-компоненты, bottom sheets, навигация
+├── constants/        # Дизайн-токены, категории по умолчанию
+├── store/            # Zustand-стор
+├── lib/              # Supabase-клиент и т.п.
+├── utils/            # Форматтеры, агрегации, утилиты дат
+├── types/            # TypeScript-типы
+├── hooks/            # React-хуки
+├── assets/           # Шрифты, изображения
+├── handoff/          # Дизайн-архив (не трогать)
+└── docs/             # Сквозная документация проекта
+```
 
-To learn more about developing your project with Expo, look at the following resources:
+## Документация
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+- [docs/architecture.md](docs/architecture.md) — архитектура и поток данных
+- [docs/design-system.md](docs/design-system.md) — дизайн-токены, типографика
+- [docs/data-model.md](docs/data-model.md) — модели данных и схема БД
+- [docs/decisions.md](docs/decisions.md) — журнал архитектурных решений
 
-## Join the community
+В каждой значимой папке проекта есть свой `README.md` с описанием содержимого.
 
-Join our community of developers creating universal apps.
+## Дизайн-источник
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+`handoff/MoneySpender v4.html` — высокоточный HTML-прототип, основной источник истины по UI.
+`handoff/README.md` — спецификация дизайнера: токены, экраны, поведение.
