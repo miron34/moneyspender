@@ -1,4 +1,4 @@
-import { Platform, View, type ViewStyle } from 'react-native';
+import { Platform, View, useWindowDimensions, type ViewStyle } from 'react-native';
 import { Colors } from '@/constants/colors';
 
 interface PhoneFrameProps {
@@ -8,8 +8,12 @@ interface PhoneFrameProps {
 export const PHONE_WIDTH = 390;
 export const PHONE_HEIGHT = 844;
 
+const MOBILE_BREAKPOINT = 600;
+
 export function PhoneFrame({ children }: PhoneFrameProps) {
-  if (Platform.OS !== 'web') {
+  const { width } = useWindowDimensions();
+
+  if (Platform.OS !== 'web' || width < MOBILE_BREAKPOINT) {
     return <>{children}</>;
   }
 
