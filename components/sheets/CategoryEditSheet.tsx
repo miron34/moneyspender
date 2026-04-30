@@ -99,7 +99,7 @@ export function CategoryEditSheet({
         onChangeText={setName}
         placeholder="Название категории"
         placeholderTextColor={Colors.textMuted}
-        style={inputStyle}
+        style={[inputStyle, webNoZoomFontSize]}
       />
 
       <Text style={fieldLabelStyle}>Иконка</Text>
@@ -191,6 +191,10 @@ const inputStyle: TextStyle = {
   fontSize: FontSize.md,
   marginBottom: 14,
 };
+
+// iOS Safari auto-zooms when input font-size < 16px. Force 16px on web only.
+const webNoZoomFontSize: TextStyle | null =
+  Platform.OS === 'web' ? { fontSize: 16 } : null;
 
 const iconGridStyle: ViewStyle = {
   flexDirection: 'row',

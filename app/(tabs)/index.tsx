@@ -114,12 +114,18 @@ export default function HomeScreen() {
                 categories={categories}
                 maxAmount={maxAmount}
                 resetKey={`${period}-bar`}
+                onSelect={(catId) =>
+                  router.push({ pathname: '/history', params: { cat: catId } })
+                }
               />
             ) : (
               <DonutChart
                 stats={stats}
                 categories={categories}
                 resetKey={`${period}-donut`}
+                onSelect={(catId) =>
+                  router.push({ pathname: '/history', params: { cat: catId } })
+                }
               />
             )}
           </View>

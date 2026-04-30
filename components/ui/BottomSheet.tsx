@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Keyboard,
   Platform,
@@ -144,7 +145,7 @@ export function BottomSheet({
 
   if (!mounted) return null;
 
-  return (
+  const tree = (
     <View style={[wrapperStyle, { zIndex }]} pointerEvents="box-none">
       <Animated.View style={[overlayBaseStyle, overlayStyle]}>
         <Pressable style={overlayPressStyle} onPress={onClose} />
@@ -163,6 +164,14 @@ export function BottomSheet({
       <Animated.View style={[fillerBaseStyle, fillerStyle]} pointerEvents="none" />
     </View>
   );
+
+  // On web, render via Portal into document.body so the sheet escapes any
+  // CSS stacking contexts created by parent screens (the TabBar otherwise
+  // sits above us). On native we stay in-tree — RN handles z-order natively.
+  if (Platform.OS === 'web' && typeof document !== 'undefined') {
+    return createPortal(tree, document.body);
+  }
+  return tree;
 }
 
 const wrapperStyle: ViewStyle = {

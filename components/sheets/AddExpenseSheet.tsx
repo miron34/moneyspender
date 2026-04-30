@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   Keyboard,
+  Platform,
   Pressable,
   Text,
   TextInput,
@@ -93,7 +94,7 @@ export function AddExpenseSheet({ open, onClose }: AddExpenseSheetProps) {
               placeholderTextColor={Colors.textMuted}
               keyboardType="decimal-pad"
               inputMode="decimal"
-              style={amountInputStyle}
+              style={[amountInputStyle, webMinShrinkStyle]}
             />
             <Text style={amountSuffixStyle}>₽</Text>
           </View>
@@ -136,7 +137,7 @@ export function AddExpenseSheet({ open, onClose }: AddExpenseSheetProps) {
           onChangeText={setComment}
           placeholder="Комментарий..."
           placeholderTextColor={Colors.textMuted}
-          style={commentInputStyle}
+          style={[commentInputStyle, webNoZoomFontSize]}
           returnKeyType="done"
           onSubmitEditing={handleSubmit}
         />
@@ -211,6 +212,17 @@ const amountInputStyle: TextStyle = {
   color: Colors.text,
   paddingVertical: 0,
 };
+
+// On web, HTML <input> has intrinsic min-width: auto, which prevents flex
+// shrinking and pushes adjacent siblings (the ₽ suffix) outside the box.
+// minWidth: 0 lets the input shrink so ₽ stays visible.
+const webMinShrinkStyle: TextStyle | null =
+  Platform.OS === 'web' ? { minWidth: 0 } : null;
+
+// iOS Safari auto-zooms when an input is focused with font-size < 16px.
+// Forcing 16px on web avoids the zoom while keeping native font-size intact.
+const webNoZoomFontSize: TextStyle | null =
+  Platform.OS === 'web' ? { fontSize: 16 } : null;
 
 const amountSuffixStyle: TextStyle = {
   fontFamily: FontFamily.light,

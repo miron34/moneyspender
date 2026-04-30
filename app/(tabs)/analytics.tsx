@@ -6,6 +6,7 @@ import {
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
+import { useRouter } from 'expo-router';
 
 import { Colors } from '@/constants/colors';
 import { FontFamily, FontSize, Spacing } from '@/constants/typography';
@@ -30,6 +31,7 @@ const PERIODS: PeriodOption<AnalyticsPeriod>[] = [
 ];
 
 export default function AnalyticsScreen() {
+  const router = useRouter();
   const expenses = useStore((s) => s.expenses);
   const categories = useStore((s) => s.categories);
 
@@ -111,6 +113,9 @@ export default function AnalyticsScreen() {
                 showPct
                 total={total}
                 resetKey={period}
+                onSelect={(catId) =>
+                  router.push({ pathname: '/history', params: { cat: catId } })
+                }
               />
             </Card>
           ) : null}

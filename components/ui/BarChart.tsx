@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
-import { Text, View, type TextStyle, type ViewStyle } from 'react-native';
+import { Pressable, Text, View, type TextStyle, type ViewStyle } from 'react-native';
 import Animated, {
   Easing,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
+  withSequence,
   withTiming,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -14,10 +15,16 @@ import { Colors, withAlpha } from '@/constants/colors';
 import { FontFamily, FontSize } from '@/constants/typography';
 import { FALLBACK_CATEGORY } from '@/constants/categories';
 import { fmt } from '@/utils/format';
+import { lightTap } from '@/lib/haptics';
 
 const BAR_DURATION = 650;
 const BAR_STAGGER = 55;
 const BAR_EASING = Easing.bezier(0.16, 1, 0.3, 1);
+
+const PULSE_UP_DURATION = 120;
+const PULSE_DOWN_DURATION = 180;
+const PULSE_SCALE = 1.06;
+const NAVIGATE_DELAY = 140;
 
 interface BarChartProps {
   stats: CategoryStat[];
@@ -30,6 +37,8 @@ interface BarChartProps {
    * Useful when the same chart is reused across periods.
    */
   resetKey?: string | number;
+  /** Drill-down: invoked after the press-pulse settles. Receives the category id. */
+  onSelect?: (catId: string) => void;
 }
 
 export function BarChart({
@@ -39,6 +48,7 @@ export function BarChart({
   showPct = false,
   total,
   resetKey,
+  onSelect,
 }: BarChartProps) {
   return (
     <View style={containerStyle}>
@@ -57,6 +67,7 @@ export function BarChart({
             index={index}
             showPct={showPct}
             total={total}
+            onPress={onSelect ? () => onSelect(stat.id) : undefined}
           />
         );
       })}
@@ -73,6 +84,7 @@ interface BarRowProps {
   index: number;
   showPct: boolean;
   total?: number;
+  onPress?: () => void;
 }
 
 function BarRow({
@@ -84,8 +96,10 @@ function BarRow({
   index,
   showPct,
   total,
+  onPress,
 }: BarRowProps) {
   const pct = useSharedValue(0);
+  const scale = useSharedValue(1);
 
   useEffect(() => {
     pct.value = withDelay(
@@ -97,9 +111,22 @@ function BarRow({
   const fillStyle = useAnimatedStyle(() => ({
     width: `${pct.value}%`,
   }));
+  const scaleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
 
-  return (
-    <View style={rowStyle}>
+  const handlePress = () => {
+    if (!onPress) return;
+    lightTap();
+    scale.value = withSequence(
+      withTiming(PULSE_SCALE, { duration: PULSE_UP_DURATION, easing: BAR_EASING }),
+      withTiming(1, { duration: PULSE_DOWN_DURATION, easing: BAR_EASING }),
+    );
+    setTimeout(onPress, NAVIGATE_DELAY);
+  };
+
+  const inner = (
+    <Animated.View style={[rowStyle, scaleStyle]}>
       <Text style={iconStyle}>{icon}</Text>
       <View style={rowMainStyle}>
         <View style={rowHeaderStyle}>
@@ -122,7 +149,15 @@ function BarRow({
           </Animated.View>
         </View>
       </View>
-    </View>
+    </Animated.View>
+  );
+
+  if (!onPress) return inner;
+
+  return (
+    <Pressable onPress={handlePress} hitSlop={4}>
+      {inner}
+    </Pressable>
   );
 }
 

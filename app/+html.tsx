@@ -20,6 +20,13 @@ export default function Root({ children }: PropsWithChildren) {
 }
 
 const globalCss = `
+  html, body, #root {
+    background-color: #131929;
+    height: 100dvh;
+    width: 100%;
+    overflow-x: hidden;
+    overscroll-behavior: none;
+  }
   input, textarea, select, button {
     outline: none !important;
     -webkit-tap-highlight-color: transparent;

@@ -104,8 +104,11 @@ const PERIODS = [
   showPct          // показывать процент рядом с суммой (Аналитика)
   total={total}    // нужно для расчёта процентов
   resetKey={period}  // при смене этого ключа все бары переанимируются с нуля
+  onSelect={(catId) => router.push({ pathname: '/history', params: { cat: catId } })}
 />
 ```
+
+**Drill-down (`onSelect`):** если проп передан, каждая строка становится кликабельной. На press-in — `lightTap()` haptics и pulse-анимация (scale 1 → 1.06 → 1, 120ms + 180ms, тот же easing). Через 140ms после press-in вызывается `onSelect(catId)`. Без `onSelect` бары — обычный View.
 
 ### `DonutChart.tsx`
 SVG donut-чарт через `react-native-svg`. Берёт топ-6 слайсов. Внутри — текст "всего" и сумма в формате `Xк`. Справа — легенда с цветным dot, лейблом и процентом.
@@ -115,10 +118,13 @@ SVG donut-чарт через `react-native-svg`. Берёт топ-6 слайс
   stats={catStats(filtered)}
   categories={cats}
   resetKey={period}  // при смене ключа сегменты переанимируются с нуля
+  onSelect={(catId) => router.push({ pathname: '/history', params: { cat: catId } })}
 />
 ```
 
 Размер фиксирован — 128×128px. Толщина обводки 18px. Каждый сектор анимируется через Reanimated `useAnimatedProps`: длина дуги растёт от 0 до целевой со staggered задержкой `index * 55ms`, длительностью 650ms, easing `cubic-bezier(0.16, 1, 0.3, 1)` (идентично BarChart).
+
+**Drill-down (`onSelect`):** при передаче пропа SVG обёрнут в `Pressable`. Hit-test находит сегмент: `atan2(y - cy, x - cx) + π/2` (учёт `rotate(-90)` SVG-системы) → ищем slice по `[startAngle, endAngle]`. Кроме того, каждая строка легенды тоже Pressable — клик по легенде эквивалентен клику по соответствующему сегменту. Pulse-анимация — **scale 1 → 1.06 → 1 на строке легенды** (через `useAnimatedStyle`, 120ms + 180ms). Сам сегмент пончика при тапе не меняется — это намеренно, чтобы анимация не отвлекала от данных в чарте. Затем `setTimeout(140 ms)` → `onSelect(catId)`.
 
 ### `SwipeableRow.tsx`
 
