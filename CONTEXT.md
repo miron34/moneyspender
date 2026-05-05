@@ -41,7 +41,8 @@
 | [constants/README.md](constants/README.md) | Дизайн-токены |
 | [store/README.md](store/README.md) | Zustand-стор, поток swipe-to-delete |
 | [lib/README.md](lib/README.md) | Supabase client, sync layer, haptics |
-| [supabase/README.md](supabase/README.md) | Как применять миграции через Dashboard |
+| [supabase/README.md](supabase/README.md) | Миграции (через Dashboard) и Edge Functions (через CLI) |
+| [lib/voice/README.md](lib/voice/README.md) | Голосовой ввод: recorder / transcribe / captureExpense |
 | [utils/README.md](utils/README.md) | format / date / analytics |
 | [types/README.md](types/README.md) | Глобальные типы |
 

@@ -35,13 +35,39 @@
 
 Внутри:
 - Поле суммы (32px Inter Light, autofocus через 350ms после открытия). Принимает decimal — точку и запятую как разделитель.
-- Декоративная иконка микрофона (Feather `mic`, opacity 0.6, без onPress)
+- **Иконка микрофона (push-to-talk)** — зажал → пишем, отпустил → STT + NLP → confirm-карточка. Подробности — `docs/voice-input.md` и `lib/voice/README.md`. State-машина внутри компонента: `voiceState: 'idle' | 'recording' | 'processing' | 'confirm'`.
 - Пилюля категории (фон `category.color@13%`, обводка `@27%`) → открывает `CategoryPickerSheet`
 - Пилюля даты/времени (нейтральный `surfaceTop`) → открывает `DatePickerSheet`
 - Поле комментария
 - Кнопка "Добавить" — disabled (`surfaceTop`/`textMuted`) при сумме ≤ 0, иначе синяя
 
 При сохранении: если комментарий пустой — `name` подставляется = `category.label`. Сама запись пишется в стор через `addExpense`.
+
+**Голос вынесен из AddExpenseSheet** в TabBar (отдельный mic-FAB рядом с «+») и собственный `VoiceConfirmSheet`. AddExpenseSheet — обычная форма без голосовой логики, но при открытии читает `voicePending` из Zustand-стора и предзаполняет поля, если оно установлено (это происходит когда пользователь нажал «Изменить» в `VoiceConfirmSheet`).
+
+**Portal target шитов внутри PhoneFrame.** Все шиты на web портятся через `createPortal` в специальный target внутри `PhoneFrame` (через `usePhoneFramePortal()` из `components/ui/PhoneFramePortal.tsx`). Это решает две задачи одновременно: пробивает stacking context (чтобы шит был выше TabBar) и оставляет шит внутри iPhone-фрейма (а не на весь монитор). На native — без изменений, in-tree рендер. Если PhoneFrame не активен (узкий web/мобильный браузер) — fallback на `document.body`.
+
+### `VoiceConfirmSheet.tsx`
+
+Шит подтверждения после успешного голосового распознавания. Открывается из `app/(tabs)/_layout.tsx` когда `VoiceCaptureSession.finish()` вернул непустой `ParsedExpense`.
+
+```tsx
+<VoiceConfirmSheet
+  open={confirmOpen}
+  onClose={handleConfirmClose}
+  pending={pending}            // ParsedExpense | null
+  categories={categories}
+  onSave={handleConfirmSave}   // addExpense + close
+  onEdit={handleConfirmEdit}   // setVoicePending(pending) + open AddExpenseSheet
+/>
+```
+
+Внутри: заголовок «Добавить трату?», крупная сумма, chip категории + name, дата строкой («Вчера», «5 апреля» — только если ≠ today), две кнопки «Изменить» / «Сохранить».
+
+- **«Сохранить»** — сразу вызывает `addExpense` со значениями из `pending` (с маппингом slug → catId с fallback на первую категорию + дата = `today`, если `pending.date` null), закрывает шит.
+- **«Изменить»** — кладёт `pending` в `useStore.voicePending`, закрывает confirm, открывает `AddExpenseSheet` через 60ms (чтобы анимации не дёргались). AddExpenseSheet при открытии читает `voicePending` и предзаполняет форму, после чего сбрасывает поле в сторе.
+
+Сам шит ничего не знает про state-машину голоса — он только рендерит карточку и зовёт колбэки. Вся state-машина (idle/recording/processing) живёт в `_layout.tsx`.
 
 Внутренние шиты `CategoryPickerSheet` и `DatePickerSheet` рендерятся как **сиблинги** AddExpenseSheet (а не вложенные внутри него), потому что вложенный sheet получил бы `position: 'absolute'` относительно родительского sheet и не покрывал бы весь экран. Им передаётся `zIndex={500}` чтобы лежать поверх AddExpenseSheet (`zIndex 400` по умолчанию).
 

@@ -21,6 +21,7 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PeriodSwitcher, type PeriodOption } from '@/components/ui/PeriodSwitcher';
 import { BarChart } from '@/components/ui/BarChart';
+import { useTabBarHeight } from '@/components/navigation/TabBar';
 
 type AnalyticsPeriod = Extract<Period, 'week' | 'month' | 'quarter'>;
 
@@ -53,10 +54,15 @@ export default function AnalyticsScreen() {
   const positiveDelta = compare.deltaPct > 0;
   const deltaColor = positiveDelta ? Colors.negative : Colors.positive;
 
+  const tabBarHeight = useTabBarHeight();
+
   return (
     <ScrollView
       style={scrollStyle}
-      contentContainerStyle={scrollContentStyle}
+      contentContainerStyle={[
+        scrollContentStyle,
+        { paddingBottom: tabBarHeight + 16 },
+      ]}
       showsVerticalScrollIndicator={false}>
       <View style={headerStyle}>
         <Text style={titleStyle}>Аналитика</Text>

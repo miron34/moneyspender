@@ -25,6 +25,7 @@ import { PeriodSwitcher, type PeriodOption } from '@/components/ui/PeriodSwitche
 import { BarChart } from '@/components/ui/BarChart';
 import { DonutChart } from '@/components/ui/DonutChart';
 import { SwipeableRow } from '@/components/ui/SwipeableRow';
+import { useTabBarHeight } from '@/components/navigation/TabBar';
 
 type HomePeriod = Extract<Period, 'day' | 'week' | 'month'>;
 type ChartMode = 'bar' | 'donut';
@@ -52,6 +53,11 @@ export default function HomeScreen() {
   const [period, setPeriod] = useState<HomePeriod>('month');
   const [mode, setMode] = useState<ChartMode>('bar');
 
+  // Reserve space for the floating TabBar so the recent-list `flex:1`
+  // doesn't extend underneath it. Without this, the adaptive row count
+  // tries to fit one extra row that ends up half-clipped by the bar.
+  const tabBarHeight = useTabBarHeight();
+
   const filtered = byPeriod(expenses, period);
   const total = sumAmount(filtered);
   const stats = catStats(filtered);
@@ -72,7 +78,7 @@ export default function HomeScreen() {
 
   return (
     <View style={scrollStyle}>
-      <View style={scrollContentStyle}>
+      <View style={[scrollContentStyle, { paddingBottom: tabBarHeight + 12 }]}>
       <View style={headerStyle}>
         <View>
           <Text style={captionStyle}>Добро пожаловать</Text>
@@ -210,7 +216,8 @@ const scrollContentStyle: ViewStyle = {
   flex: 1,
   paddingHorizontal: Spacing.screenH,
   paddingTop: Spacing.screenV,
-  paddingBottom: 12,
+  // paddingBottom is applied inline using useTabBarHeight() so the
+  // recent-list's `flex:1` can't slide under the floating TabBar.
 };
 
 const headerStyle: ViewStyle = {

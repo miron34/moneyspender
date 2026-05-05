@@ -27,6 +27,7 @@ import { FALLBACK_CATEGORY } from '@/constants/categories';
 import { ExpenseRow } from '@/components/ui/ExpenseRow';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SwipeableRow } from '@/components/ui/SwipeableRow';
+import { useTabBarHeight } from '@/components/navigation/TabBar';
 import { CategoryPickerSheet } from '@/components/sheets/CategoryPickerSheet';
 import {
   SortPickerSheet,
@@ -56,6 +57,10 @@ export default function HistoryScreen() {
   const [sortMode, setSortMode] = useState<SortMode>('date');
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState('');
+
+  // Reserve space at the bottom of the scroll for the floating TabBar +
+  // VoiceFab so the last expense doesn't slide under them.
+  const tabBarHeight = useTabBarHeight();
 
   const [catSheetOpen, setCatSheetOpen] = useState(false);
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
@@ -238,7 +243,10 @@ export default function HistoryScreen() {
 
       <Animated.ScrollView
         style={scrollStyle}
-        contentContainerStyle={scrollContentStyle}
+        contentContainerStyle={[
+          scrollContentStyle,
+          { paddingBottom: tabBarHeight + 16 },
+        ]}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={16}>

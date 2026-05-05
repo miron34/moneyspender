@@ -13,7 +13,13 @@ import {
 import type { Category } from '@/types';
 import { Colors, withAlpha } from '@/constants/colors';
 import { FontFamily, FontSize, Radius } from '@/constants/typography';
-import { COLOR_OPTIONS, ICON_OPTIONS } from '@/constants/categories';
+import {
+  COLOR_OPTIONS,
+  COLOR_OPTIONS_COMPACT_COUNT,
+  ICON_OPTIONS,
+  ICON_OPTIONS_COMPACT_COUNT,
+  MAX_CATEGORY_DESCRIPTION_LEN,
+} from '@/constants/categories';
 import { BottomSheet } from '@/components/ui/BottomSheet';
 import { success, warning } from '@/lib/haptics';
 
@@ -24,6 +30,12 @@ export interface CategoryDraft {
   label: string;
   icon: string;
   color: string;
+  /**
+   * Optional voice-parser hint. Empty string means clear (becomes NULL
+   * in the DB column). The CategoryEditSheet validates length, but the
+   * underlying useStore.updateCategory just passes through.
+   */
+  description?: string;
 }
 
 interface CategoryEditSheetProps {
@@ -47,22 +59,54 @@ export function CategoryEditSheet({
   const [name, setName] = useState(initial?.label ?? '');
   const [icon, setIcon] = useState(initial?.icon ?? DEFAULT_ICON);
   const [color, setColor] = useState(initial?.color ?? DEFAULT_COLOR);
+  const [description, setDescription] = useState(initial?.description ?? '');
+  const [iconsExpanded, setIconsExpanded] = useState(false);
+  const [colorsExpanded, setColorsExpanded] = useState(false);
 
   useEffect(() => {
     if (open) {
       setName(initial?.label ?? '');
       setIcon(initial?.icon ?? DEFAULT_ICON);
       setColor(initial?.color ?? DEFAULT_COLOR);
+      setDescription(initial?.description ?? '');
+      // Auto-expand if the current icon/color isn't in the compact set —
+      // user already picked a "rare" choice, hiding it on re-open would
+      // be confusing.
+      const currentIcon = initial?.icon ?? DEFAULT_ICON;
+      const currentColor = initial?.color ?? DEFAULT_COLOR;
+      const compactIcons = ICON_OPTIONS.slice(0, ICON_OPTIONS_COMPACT_COUNT);
+      const compactColors = COLOR_OPTIONS.slice(0, COLOR_OPTIONS_COMPACT_COUNT);
+      setIconsExpanded(!compactIcons.includes(currentIcon));
+      setColorsExpanded(!compactColors.includes(currentColor));
     }
   }, [open, initial]);
+
+  const visibleIcons = iconsExpanded
+    ? ICON_OPTIONS
+    : ICON_OPTIONS.slice(0, ICON_OPTIONS_COMPACT_COUNT);
+  const visibleColors = colorsExpanded
+    ? COLOR_OPTIONS
+    : COLOR_OPTIONS.slice(0, COLOR_OPTIONS_COMPACT_COUNT);
 
   const trimmed = name.trim();
   const canSubmit = trimmed.length > 0;
 
+  // Description state — clamp to MAX_CATEGORY_DESCRIPTION_LEN. Counter
+  // shown under the field. Empty trimmed → undefined so the store sees
+  // "clear" instead of "set to empty string".
+  const trimmedDescription = description.trim();
+  const remainingChars =
+    MAX_CATEGORY_DESCRIPTION_LEN - description.length;
+
   const handleSubmit = () => {
     if (!canSubmit) return;
     success();
-    onSubmit({ label: trimmed, icon, color });
+    onSubmit({
+      label: trimmed,
+      icon,
+      color,
+      description: trimmedDescription || undefined,
+    });
   };
 
   const handleDelete = () => {
@@ -92,7 +136,9 @@ export function CategoryEditSheet({
     <BottomSheet
       open={open}
       onClose={onClose}
-      title={isEdit ? 'Редактировать категорию' : 'Новая категория'}>
+      title={isEdit ? 'Редактировать категорию' : 'Новая категория'}
+      maxHeight="92%"
+      scrollable>
       <Text style={fieldLabelStyle}>Название</Text>
       <TextInput
         value={name}
@@ -104,11 +150,14 @@ export function CategoryEditSheet({
 
       <Text style={fieldLabelStyle}>Иконка</Text>
       <View style={iconGridStyle}>
-        {ICON_OPTIONS.map((ic) => {
+        {visibleIcons.map((ic, idx) => {
           const active = ic === icon;
           return (
+            // Composite key — emoji alone isn't a guaranteed-unique
+            // primary key (we briefly shipped a duplicate 🏥). Index
+            // disambiguates if we ever ship another typo.
             <Pressable
-              key={ic}
+              key={`${ic}-${idx}`}
               onPress={() => setIcon(ic)}
               style={[
                 iconButtonStyle,
@@ -122,10 +171,48 @@ export function CategoryEditSheet({
           );
         })}
       </View>
+      {ICON_OPTIONS.length > ICON_OPTIONS_COMPACT_COUNT && (
+        <Pressable
+          onPress={() => setIconsExpanded((v) => !v)}
+          style={iconsToggleStyle}>
+          <Text style={iconsToggleTextStyle}>
+            {iconsExpanded
+              ? 'Свернуть иконки'
+              : `Ещё иконки (${ICON_OPTIONS.length - ICON_OPTIONS_COMPACT_COUNT}) ↓`}
+          </Text>
+        </Pressable>
+      )}
+
+      <View style={descriptionLabelRowStyle}>
+        <Text style={fieldLabelStyle}>Подсказка для голоса (необязательно)</Text>
+        <Text
+          style={[
+            counterStyle,
+            remainingChars < 0 && counterOverflowStyle,
+          ]}>
+          {description.length}/{MAX_CATEGORY_DESCRIPTION_LEN}
+        </Text>
+      </View>
+      <TextInput
+        value={description}
+        onChangeText={(t) =>
+          setDescription(t.slice(0, MAX_CATEGORY_DESCRIPTION_LEN))
+        }
+        placeholder="Например: дрель, фрезер, шуруповёрт, столярка"
+        placeholderTextColor={Colors.textMuted}
+        multiline
+        maxLength={MAX_CATEGORY_DESCRIPTION_LEN}
+        style={[descriptionInputStyle, webNoZoomFontSize]}
+      />
+      <Text style={hintStyle}>
+        Помогает голосу понимать, что относится к этой категории. Например, если
+        сказать «учебник 500», голос знает что это «Образование» именно благодаря
+        подсказке.
+      </Text>
 
       <Text style={fieldLabelStyle}>Цвет</Text>
       <View style={colorGridStyle}>
-        {COLOR_OPTIONS.map((cl) => {
+        {visibleColors.map((cl) => {
           const active = cl === color;
           return (
             <Pressable
@@ -142,6 +229,17 @@ export function CategoryEditSheet({
           );
         })}
       </View>
+      {COLOR_OPTIONS.length > COLOR_OPTIONS_COMPACT_COUNT && (
+        <Pressable
+          onPress={() => setColorsExpanded((v) => !v)}
+          style={iconsToggleStyle}>
+          <Text style={iconsToggleTextStyle}>
+            {colorsExpanded
+              ? 'Свернуть цвета'
+              : `Ещё цвета (${COLOR_OPTIONS.length - COLOR_OPTIONS_COMPACT_COUNT}) ↓`}
+          </Text>
+        </Pressable>
+      )}
 
       <Pressable
         onPress={handleSubmit}
@@ -199,7 +297,11 @@ const webNoZoomFontSize: TextStyle | null =
 const iconGridStyle: ViewStyle = {
   flexDirection: 'row',
   flexWrap: 'wrap',
-  gap: 8,
+  // space-between distributes icons evenly across the row regardless of
+  // sheet width, so 8 icons always fill the row without spilling onto
+  // the next line. Gaps are computed by flex, not fixed.
+  justifyContent: 'space-between',
+  rowGap: 10,
   marginBottom: 14,
 };
 
@@ -213,20 +315,76 @@ const iconButtonStyle: ViewStyle = {
 };
 
 const iconCharStyle: TextStyle = {
-  fontSize: 20,
+  fontSize: 22,
+};
+
+const iconsToggleStyle: ViewStyle = {
+  alignSelf: 'flex-start',
+  paddingVertical: 6,
+  paddingHorizontal: 2,
+  marginTop: -6,
+  marginBottom: 14,
+};
+
+const iconsToggleTextStyle: TextStyle = {
+  fontFamily: FontFamily.medium,
+  fontSize: FontSize.sm,
+  color: Colors.accent,
+};
+
+const descriptionLabelRowStyle: ViewStyle = {
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  marginBottom: 8,
+};
+
+const counterStyle: TextStyle = {
+  fontFamily: FontFamily.regular,
+  fontSize: FontSize.xs,
+  color: Colors.textMuted,
+};
+
+const counterOverflowStyle: TextStyle = {
+  color: Colors.negative,
+};
+
+const descriptionInputStyle: TextStyle = {
+  width: '100%',
+  minHeight: 64,
+  backgroundColor: Colors.surface,
+  borderWidth: 1,
+  borderColor: Colors.borderMid,
+  borderRadius: Radius.md,
+  paddingVertical: 10,
+  paddingHorizontal: 14,
+  color: Colors.text,
+  fontFamily: FontFamily.regular,
+  fontSize: FontSize.md,
+  marginBottom: 8,
+  textAlignVertical: 'top',
+};
+
+const hintStyle: TextStyle = {
+  fontFamily: FontFamily.regular,
+  fontSize: FontSize.xs,
+  color: Colors.textMuted,
+  lineHeight: 16,
+  marginBottom: 14,
 };
 
 const colorGridStyle: ViewStyle = {
   flexDirection: 'row',
   flexWrap: 'wrap',
-  gap: 8,
+  justifyContent: 'space-between',
+  rowGap: 10,
   marginBottom: 18,
 };
 
 const colorSwatchStyle: ViewStyle = {
-  width: 34,
-  height: 34,
-  borderRadius: 17,
+  width: 36,
+  height: 36,
+  borderRadius: 18,
   borderWidth: 2,
 };
 

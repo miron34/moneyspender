@@ -29,6 +29,7 @@ const expenses = useStore.getState().expenses;
 - **`addCategory(draft) → Category`** — создаёт категорию с `id = 'cat_' + timestamp`.
 - **`updateCategory(id, draft)`** — мерж draft в существующую категорию.
 - **`deleteCategory(id)`** — удаляет. Существующие траты с этим cat будут показывать `FALLBACK_CATEGORY` через `findCategory`.
+- **`setVoicePending(p | null)`** — кладёт `ParsedExpense` для передачи между `VoiceConfirmSheet` и `AddExpenseSheet`. Используется ровно когда пользователь нажал «Изменить» в confirm-шите: confirm устанавливает значение, AddExpenseSheet читает на open и сбрасывает в `null`. Не предназначен для других целей — это узкоспециализированный handoff slot, не общая «черновик-форма».
 
 ## Поток swipe-to-delete
 

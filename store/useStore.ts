@@ -1,7 +1,9 @@
 import { create } from 'zustand';
 import type { Category, Expense } from '@/types';
+import type { ParsedExpense } from '@/types/voice';
 import { DEFAULT_CATEGORIES } from '@/constants/categories';
 import {
+  backfillDefaultDescriptions,
   deleteCategoryRemote,
   deleteExpenseRemote,
   fetchAll,
@@ -24,6 +26,8 @@ export interface CategoryDraft {
   label: string;
   icon: string;
   color: string;
+  /** Optional voice-parser hint. Empty string = clear (column → NULL). */
+  description?: string;
 }
 
 interface StoreState {
@@ -38,6 +42,18 @@ interface StoreState {
    * Cleared on undo (after restoreExpense) or after the toast timer expires.
    */
   pendingDelete: Expense | null;
+
+  /**
+   * Voice-recognized values waiting to be applied to AddExpenseSheet.
+   *
+   * Set by VoiceConfirmSheet when the user taps "Изменить" — the user
+   * wants to edit the parsed result manually. Read by AddExpenseSheet on
+   * open to prefill its form fields, then cleared. Allows handing off
+   * recognized values across two unrelated sheets without prop-drilling
+   * through `app/(tabs)/_layout.tsx`.
+   */
+  voicePending: ParsedExpense | null;
+  setVoicePending: (p: ParsedExpense | null) => void;
 
   loadInitial: () => Promise<void>;
 
@@ -64,6 +80,7 @@ export const useStore = create<StoreState>((set, get) => ({
   loaded: false,
   syncError: null,
   pendingDelete: null,
+  voicePending: null,
 
   loadInitial: async () => {
     if (!isSupabaseConfigured) {
@@ -89,7 +106,17 @@ export const useStore = create<StoreState>((set, get) => ({
           syncError: null,
         });
       } else {
-        set({ categories, expenses, loaded: true, syncError: null });
+        // Existing install — backfill missing descriptions on default
+        // categories. Migration `0002_category_description.sql` added a
+        // nullable column; old DBs land with description=null on the
+        // defaults. We patch them to match DEFAULT_CATEGORIES, leaving
+        // user-created categories alone. Best-effort — failure doesn't
+        // block load.
+        const patched = await backfillDefaultDescriptions(
+          categories,
+          DEFAULT_CATEGORIES,
+        );
+        set({ categories: patched, expenses, loaded: true, syncError: null });
       }
     } catch (err) {
       console.warn('[supabase] loadInitial failed, falling back to mock', err);
@@ -139,6 +166,8 @@ export const useStore = create<StoreState>((set, get) => ({
 
   setPendingDelete: (e) => set({ pendingDelete: e }),
 
+  setVoicePending: (p) => set({ voicePending: p }),
+
   addCategory: (draft) => {
     const cat: Category = { id: `cat_${nextId()}`, ...draft };
     set((s) => ({ categories: [...s.categories, cat] }));
@@ -156,7 +185,12 @@ export const useStore = create<StoreState>((set, get) => ({
       categories: s.categories.map((c) => (c.id === id ? { ...c, ...draft } : c)),
     }));
     if (isSupabaseConfigured) {
-      updateCategoryRemote(id, draft).catch((err) => {
+      updateCategoryRemote(id, {
+        label: draft.label,
+        icon: draft.icon,
+        color: draft.color,
+        description: draft.description,
+      }).catch((err) => {
         console.warn('[supabase] updateCategoryRemote failed', err);
         get().setSyncError('Не удалось обновить категорию');
       });

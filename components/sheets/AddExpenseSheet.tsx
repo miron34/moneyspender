@@ -39,6 +39,12 @@ interface AddExpenseSheetProps {
 export function AddExpenseSheet({ open, onClose }: AddExpenseSheetProps) {
   const categories = useStore((s) => s.categories);
   const addExpense = useStore((s) => s.addExpense);
+  // Voice handoff: when user picks "Изменить" in VoiceConfirmSheet, the
+  // recognized values land here through the store. AddExpenseSheet reads
+  // them on open, prefills its fields, then clears the slot so a manual
+  // "+" tap right after won't re-fill stale values.
+  const voicePending = useStore((s) => s.voicePending);
+  const setVoicePending = useStore((s) => s.setVoicePending);
 
   const fallbackId = categories[0]?.id ?? FALLBACK_CATEGORY.id;
   const [amount, setAmount] = useState('');
@@ -51,16 +57,38 @@ export function AddExpenseSheet({ open, onClose }: AddExpenseSheetProps) {
   const amountRef = useRef<TextInput>(null);
 
   useEffect(() => {
-    if (open) {
-      setAmount('');
-      setComment('');
-      setDate(new Date());
-      setSelCat(fallbackId);
-      setCatSheetOpen(false);
-      setDateSheetOpen(false);
-      const t = setTimeout(() => amountRef.current?.focus(), FOCUS_DELAY);
-      return () => clearTimeout(t);
+    if (!open) return;
+
+    // Reset form. Then, if there's a voicePending handoff in the store,
+    // overlay its values on top of the defaults — and clear the store.
+    let initialAmount = '';
+    let initialComment = '';
+    let initialDate = new Date();
+    let initialCat = fallbackId;
+
+    if (voicePending) {
+      if (voicePending.amount !== null) initialAmount = String(voicePending.amount);
+      if (voicePending.name) initialComment = voicePending.name;
+      if (voicePending.date) initialDate = localMidnightFromIso(voicePending.date);
+      if (voicePending.cat && categories.find((c) => c.id === voicePending.cat)) {
+        initialCat = voicePending.cat;
+      }
+      setVoicePending(null); // one-shot
     }
+
+    setAmount(initialAmount);
+    setComment(initialComment);
+    setDate(initialDate);
+    setSelCat(initialCat);
+    setCatSheetOpen(false);
+    setDateSheetOpen(false);
+
+    const t = setTimeout(() => amountRef.current?.focus(), FOCUS_DELAY);
+    return () => clearTimeout(t);
+    // We deliberately depend only on `open` and `fallbackId` — voicePending
+    // is consumed on the same tick as `open` flips to true and isn't a
+    // continuous source of updates.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, fallbackId]);
 
   const cat =
@@ -97,9 +125,6 @@ export function AddExpenseSheet({ open, onClose }: AddExpenseSheetProps) {
               style={[amountInputStyle, webMinShrinkStyle]}
             />
             <Text style={amountSuffixStyle}>₽</Text>
-          </View>
-          <View style={micButtonStyle}>
-            <Feather name="mic" size={18} color={Colors.textMuted} />
           </View>
         </View>
 
@@ -186,6 +211,21 @@ export function AddExpenseSheet({ open, onClose }: AddExpenseSheetProps) {
   );
 }
 
+// Build a Date for local midnight from a YYYY-MM-DD string. Using
+// `new Date('2026-05-03')` would give UTC midnight — fine for ISO sorting
+// but wrong for displaying a "day". `setHours(0,0,0,0)` keeps us in the
+// user's TZ so the day shown matches the day they spoke.
+function localMidnightFromIso(iso: string): Date {
+  const [y, m, d] = iso.split('-').map((s) => parseInt(s, 10));
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
+    return new Date();
+  }
+  const date = new Date();
+  date.setFullYear(y, m - 1, d);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
 const amountRowStyle: ViewStyle = {
   flexDirection: 'row',
   alignItems: 'center',
@@ -228,16 +268,6 @@ const amountSuffixStyle: TextStyle = {
   fontFamily: FontFamily.light,
   fontSize: 22,
   color: Colors.textMuted,
-};
-
-const micButtonStyle: ViewStyle = {
-  width: 44,
-  height: 44,
-  borderRadius: 22,
-  backgroundColor: Colors.surfaceTop,
-  alignItems: 'center',
-  justifyContent: 'center',
-  opacity: 0.6,
 };
 
 const pillsRowStyle: ViewStyle = {

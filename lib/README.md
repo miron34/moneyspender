@@ -28,6 +28,42 @@
 
 **ID трат:** генерируются на клиенте — `Date.now() * 1000 + random(0..999)`. Это упрощает optimistic-update (id не нужно ждать с сервера). Коллизия теоретически возможна, но для одного пользователя пренебрежимо мала.
 
+### `voice/`
+
+Голосовой ввод трат: запись микрофона → STT → NLP → структурированный `ParsedExpense`. Подробности — `lib/voice/README.md` и `docs/voice-input.md`. Публичный API:
+
+```ts
+import { VoiceCaptureSession, MIN_DURATION_MS, MAX_DURATION_MS } from '@/lib/voice';
+
+const session = new VoiceCaptureSession();
+await session.start();        // на press-in иконки mic
+const result = await session.finish();   // на press-out → {parsed, transcript, durationMs}
+session.cancel();             // на отмену / unmount
+```
+
+### `parseExpense.ts`
+
+Клиентская обёртка над Edge Function `parse-expense`. Принимает свободную русскую фразу о трате, возвращает структурированный `ParsedExpense` (`{amount, name, cat}`).
+
+| Вход | Выход |
+|---|---|
+| `"в пятёрочке на 800"` | `{amount: 800, name: "Пятёрочка", cat: "food"}` |
+| `"такси 350"` | `{amount: 350, name: "Такси", cat: "trans"}` |
+| `""` | `{amount: null, name: null, cat: null}` (без сетевого запроса) |
+
+Бросает `ParseExpenseError` при сетевых ошибках, отсутствии конфигурации Supabase и при структурированных `{error: ...}` ответах функции. **Не** бросает при «модель не смогла распарсить» — возвращает all-null, вызывающая сторона решает что делать (обычно — оставить форму как есть и показать тост).
+
+`cat` приходит slug'ом (`food/cafe/...`). Маппинг slug → `Category.id` пользователя — на стороне вызывающего компонента (типично `AddExpenseSheet`), потому что только он знает текущий выбранный fallback.
+
+### `errors.ts`
+
+| Класс | Когда бросается |
+|---|---|
+| `ParseExpenseError` | Ошибка вызова `parse-expense` Edge Function (сеть, конфиг, ответ функции с `error`) |
+| `STTError` | Ошибка записи микрофона или вызова `transcribe-audio` (нет разрешения, MediaRecorder не поддерживается, сетевой сбой) |
+
+Оба класса наследуются от `Error`, имеют `.name` и опциональный `.cause` для оригинальной transport-ошибки.
+
 ### `haptics.ts`
 
 Тонкая обёртка над `expo-haptics` с no-op fallback на web и обработкой ошибок.

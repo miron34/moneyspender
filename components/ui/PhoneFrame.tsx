@@ -1,5 +1,6 @@
 import { Platform, View, useWindowDimensions, type ViewStyle } from 'react-native';
 import { Colors } from '@/constants/colors';
+import { PhoneFramePortalHost } from './PhoneFramePortal';
 
 interface PhoneFrameProps {
   children: React.ReactNode;
@@ -21,8 +22,16 @@ export function PhoneFrame({ children }: PhoneFrameProps) {
     <View style={pageStyle}>
       <View style={frameStyle}>
         <View style={innerStyle}>
-          <StatusBarMock />
-          <View style={contentStyle}>{children}</View>
+          {/*
+            PhoneFramePortalHost gives BottomSheet a portal target located
+            *inside* the phone frame on web — so sheets stay within the
+            iPhone shell instead of covering the whole desktop window.
+            On native it's a passthrough.
+          */}
+          <PhoneFramePortalHost>
+            <StatusBarMock />
+            <View style={contentStyle}>{children}</View>
+          </PhoneFramePortalHost>
         </View>
         <View style={[sideButton, { left: -3, top: 188, height: 60 }]} />
         <View style={[sideButton, { left: -3, top: 260, height: 60 }]} />

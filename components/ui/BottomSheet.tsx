@@ -4,6 +4,7 @@ import {
   Keyboard,
   Platform,
   Pressable,
+  ScrollView,
   Text,
   View,
   type DimensionValue,
@@ -19,9 +20,12 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Colors } from '@/constants/colors';
 import { FontFamily, FontSize, Radius } from '@/constants/typography';
+import { useTabBarHeight } from '@/components/navigation/TabBar';
+import { usePhoneFramePortal } from './PhoneFramePortal';
 
 const ENTER_DURATION = 320;
 const EXIT_DURATION = 220;
@@ -45,6 +49,24 @@ interface BottomSheetProps {
   maxHeight?: DimensionValue;
   children: React.ReactNode;
   zIndex?: number;
+  /**
+   * Optional banner rendered just above the sheet (outside the sheet
+   * surface itself). Useful for inline toasts/errors that should appear
+   * close to the sheet but not crowd the content. Because the wrapper
+   * uses flex-end column layout, putting the banner before the sheet
+   * in the tree naturally stacks it directly above the sheet's top edge.
+   */
+  topBanner?: React.ReactNode;
+  /**
+   * Wrap children in a vertical ScrollView. Use when the sheet content
+   * exceeds the sheet height (e.g. forms with many fields). The handle
+   * row stays sticky at top so drag-to-close keeps working — only the
+   * inner content scrolls.
+   *
+   * Pair with a higher `maxHeight` like '92%' so users see most of the
+   * form at once and only need to scroll for the long tail.
+   */
+  scrollable?: boolean;
 }
 
 export function BottomSheet({
@@ -54,8 +76,26 @@ export function BottomSheet({
   maxHeight = '78%',
   children,
   zIndex = 400,
+  topBanner,
+  scrollable = false,
 }: BottomSheetProps) {
   const [mounted, setMounted] = useState(open);
+  const phonePortalEl = usePhoneFramePortal();
+  const insets = useSafeAreaInsets();
+  const tabBarHeight = useTabBarHeight();
+  // Sheet's paddingBottom must clear:
+  //   1. iPhone home indicator (insets.bottom)
+  //   2. The floating TabBar
+  //   3. The VoiceFab perched on the TabBar's top edge
+  // Without this, on a sheet rendered inside a tab screen (e.g.
+  // CategoryEditSheet inside Profile) the bottom buttons hide *under*
+  // the floating bar/FAB and the user can't scroll past them. We
+  // simply reserve `tabBarHeight + 16` so the last interactive element
+  // of any sheet sits above the bar with a finger's worth of breathing
+  // room. Web (where the bar isn't a layering issue) still benefits —
+  // useTabBarHeight returns 0 + 6 + 56 = 62, which is roughly the
+  // current 28+34 we'd pick anyway.
+  const bottomPad = Math.max(28, insets.bottom + 16, tabBarHeight + 16);
   const overlayOpacity = useSharedValue(0);
   const sheetTranslate = useSharedValue(40);
   const sheetOpacity = useSharedValue(0);
@@ -150,7 +190,18 @@ export function BottomSheet({
       <Animated.View style={[overlayBaseStyle, overlayStyle]}>
         <Pressable style={overlayPressStyle} onPress={onClose} />
       </Animated.View>
-      <Animated.View style={[sheetBaseStyle, { maxHeight }, sheetStyle]}>
+      {topBanner ? (
+        // Flex-end column layout puts this directly above the sheet.
+        // pointerEvents="box-none" so the banner doesn't block taps to the
+        // overlay behind it (the user can still tap-outside-to-close).
+        <Animated.View
+          style={[topBannerWrapperStyle, sheetStyle]}
+          pointerEvents="box-none">
+          {topBanner}
+        </Animated.View>
+      ) : null}
+      <Animated.View
+        style={[sheetBaseStyle, { maxHeight, paddingBottom: bottomPad }, sheetStyle]}>
         <GestureDetector gesture={dragGesture}>
           <View style={dragZoneStyle}>
             <View style={handleRowStyle}>
@@ -159,17 +210,34 @@ export function BottomSheet({
             {title ? <Text style={titleStyle}>{title}</Text> : null}
           </View>
         </GestureDetector>
-        <View style={contentStyle}>{children}</View>
+        {scrollable ? (
+          <ScrollView
+            style={scrollableContentStyle}
+            contentContainerStyle={contentStyle}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}>
+            {children}
+          </ScrollView>
+        ) : (
+          <View style={contentStyle}>{children}</View>
+        )}
       </Animated.View>
       <Animated.View style={[fillerBaseStyle, fillerStyle]} pointerEvents="none" />
     </View>
   );
 
-  // On web, render via Portal into document.body so the sheet escapes any
-  // CSS stacking contexts created by parent screens (the TabBar otherwise
-  // sits above us). On native we stay in-tree — RN handles z-order natively.
+  // On web, render via Portal so the sheet escapes any CSS stacking
+  // contexts created by parent screens (TabBar etc would otherwise sit
+  // above us). Target priority:
+  //   1. PhoneFrame's portal target (desktop web with iPhone shell visible)
+  //      → keeps the sheet inside the iPhone frame, not covering the
+  //      whole window.
+  //   2. document.body (mobile web with no shell, or PhoneFrame not yet
+  //      mounted) → sheet covers the full viewport, which is correct on
+  //      a real phone-sized window.
+  // On native we stay in-tree — RN handles z-order via elevation.
   if (Platform.OS === 'web' && typeof document !== 'undefined') {
-    return createPortal(tree, document.body);
+    return createPortal(tree, phonePortalEl ?? document.body);
   }
   return tree;
 }
@@ -202,7 +270,14 @@ const sheetBaseStyle: ViewStyle = {
   borderTopRightRadius: Radius.sheet,
   borderTopWidth: 1,
   borderTopColor: Colors.borderMid,
-  paddingBottom: 28,
+  // paddingBottom is applied dynamically in the component body using
+  // safe-area insets so the sheet content clears the home indicator.
+};
+
+const topBannerWrapperStyle: ViewStyle = {
+  paddingHorizontal: 14,
+  paddingBottom: 10,
+  alignItems: 'center',
 };
 
 const fillerBaseStyle: ViewStyle = {
@@ -241,4 +316,12 @@ const titleStyle: TextStyle = {
 
 const contentStyle: ViewStyle = {
   paddingHorizontal: 20,
+};
+
+// flexShrink:1 lets the ScrollView take exactly the remaining space
+// inside the sheet (between sticky header and the bottom edge), so
+// vertical scroll triggers when content is taller than that band —
+// which is exactly when we want it to.
+const scrollableContentStyle: ViewStyle = {
+  flexShrink: 1,
 };

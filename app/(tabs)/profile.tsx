@@ -20,6 +20,8 @@ import {
   CategoryEditSheet,
   type CategoryDraft,
 } from '@/components/sheets/CategoryEditSheet';
+import { useTabBarHeight } from '@/components/navigation/TabBar';
+import { MAX_CATEGORIES } from '@/constants/categories';
 
 export default function ProfileScreen() {
   const expenses = useStore((s) => s.expenses);
@@ -31,6 +33,8 @@ export default function ProfileScreen() {
 
   const [editing, setEditing] = useState<Category | null>(null);
   const [addOpen, setAddOpen] = useState(false);
+
+  const tabBarHeight = useTabBarHeight();
 
   const totalAmount = sumAmount(expenses);
   const initial = userName.charAt(0).toUpperCase();
@@ -57,7 +61,10 @@ export default function ProfileScreen() {
     <View style={containerStyle}>
       <ScrollView
         style={scrollStyle}
-        contentContainerStyle={scrollContentStyle}
+        contentContainerStyle={[
+          scrollContentStyle,
+          { paddingBottom: tabBarHeight + 20 },
+        ]}
         showsVerticalScrollIndicator={false}>
         <Text style={titleStyle}>Профиль</Text>
 
@@ -96,9 +103,30 @@ export default function ProfileScreen() {
           ))}
         </View>
 
-        <Pressable onPress={() => setAddOpen(true)} style={addButtonStyle}>
-          <Text style={addButtonTextStyle}>+ Добавить категорию</Text>
-        </Pressable>
+        {(() => {
+          const atLimit = categories.length >= MAX_CATEGORIES;
+          return (
+            <>
+              <Pressable
+                onPress={() => !atLimit && setAddOpen(true)}
+                disabled={atLimit}
+                style={[addButtonStyle, atLimit && addButtonDisabledStyle]}>
+                <Text
+                  style={[
+                    addButtonTextStyle,
+                    atLimit && addButtonTextDisabledStyle,
+                  ]}>
+                  + Добавить категорию
+                </Text>
+              </Pressable>
+              {atLimit && (
+                <Text style={limitHintStyle}>
+                  Достигнут лимит {MAX_CATEGORIES} категорий — удалите ненужные
+                </Text>
+              )}
+            </>
+          );
+        })()}
 
         <Text style={versionStyle}>MoneySpender v{version}</Text>
       </ScrollView>
@@ -261,6 +289,23 @@ const addButtonTextStyle: TextStyle = {
   fontFamily: FontFamily.regular,
   fontSize: FontSize.md,
   color: Colors.textDim,
+};
+
+const addButtonDisabledStyle: ViewStyle = {
+  opacity: 0.45,
+};
+
+const addButtonTextDisabledStyle: TextStyle = {
+  color: Colors.textMuted,
+};
+
+const limitHintStyle: TextStyle = {
+  textAlign: 'center',
+  fontFamily: FontFamily.regular,
+  fontSize: FontSize.xs,
+  color: Colors.textMuted,
+  marginTop: -10,
+  marginBottom: 16,
 };
 
 const versionStyle: TextStyle = {

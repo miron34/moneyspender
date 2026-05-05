@@ -4,7 +4,8 @@
 
 ## Файлы
 
-- **`index.ts`** — `Expense`, `Category`, `Period`, `CategoryStat`, `DayGroup`.
+- **`index.ts`** — `Expense`, `Category`, `Period`, `CategoryStat`, `DayGroup`. Реэкспортирует типы из `voice.ts`.
+- **`voice.ts`** — `ExpenseCat` (slug-таксономия из 10 категорий) и `ParsedExpense` (`{amount, name, cat}`) — структура ответа `parse-expense` Edge Function. Зеркалится в `supabase/functions/_shared/types.ts`.
 
 ## Контракты
 

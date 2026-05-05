@@ -7,6 +7,7 @@
 - **`colors.ts`** — палитра приложения (`Colors`) + хелпер `withAlpha(hex, 0..1)` для генерации полупрозрачных оттенков. Все компоненты импортируют отсюда — не хардкодить hex в стилях.
 - **`typography.ts`** — шрифты (`FontFamily`), размеры (`FontSize`), отступы (`Spacing`), радиусы (`Radius`). Один источник правды для всех визуальных размеров.
 - **`categories.ts`** — `DEFAULT_CATEGORIES` (10 шт.), `ICON_OPTIONS`, `COLOR_OPTIONS` для редактора категорий, `FALLBACK_CATEGORY` на случай если category id не найден в массиве.
+- **`voice.ts`** — `PARSE_EXPENSE_FN` (имя Edge Function для NLP-парсинга трат). Сами параметры YandexGPT (URL, модель, ключи) живут на сервере, в клиентских константах их нет — см. `docs/decisions.md`.
 
 ## Правила
 
